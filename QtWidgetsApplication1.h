@@ -25,6 +25,7 @@ private slots:
     void onTimerTimeout();
     void onStartClicked();
     void onStopClicked();
+    void onRestartClicked();
     void onJumpToJunction(const QString& juncId);
 
 private:

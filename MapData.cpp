@@ -225,6 +225,12 @@ void MapData::updateSimulationStep() {
     m_stepCounter++;
 }
 
+void MapData::reset() {
+    m_currentFrameIndex = 0;
+    m_stepCounter = 0;
+    m_vehicles.clear(); // 清空当前车辆，防止画面残留
+}
+
 QPointF MapData::getJunctionPosition(const QString& id) {
     for (const auto& junc : m_junctions) {
         if (junc.id == id) {

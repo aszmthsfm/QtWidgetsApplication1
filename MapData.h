@@ -63,6 +63,8 @@ public:
     void updateSimulationStep();
     QPointF getJunctionPosition(const QString& id);
 
+    void reset();
+
 private:
     void parseShape(const QString& shapeStr, QVector<QPointF>& outPoints);
     void spawnVehicle();

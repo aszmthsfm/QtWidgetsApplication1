@@ -105,10 +105,12 @@ void QtWidgetsApplication1::initUI() {
 
     QPushButton* startBtn = new QPushButton("Start");
     QPushButton* stopBtn = new QPushButton("Stop");
+    QPushButton* restartBtn = new QPushButton("Restart");
 
     // 连接控制按钮
     connect(startBtn, &QPushButton::clicked, this, &QtWidgetsApplication1::onStartClicked);
     connect(stopBtn, &QPushButton::clicked, this, &QtWidgetsApplication1::onStopClicked);
+    connect(restartBtn, &QPushButton::clicked, this, &QtWidgetsApplication1::onRestartClicked);
 
     ctrlLayout->addWidget(new QLabel("Render Scene @"));
     ctrlLayout->addWidget(m_spinFPS);
@@ -116,6 +118,7 @@ void QtWidgetsApplication1::initUI() {
     ctrlLayout->addSpacing(20);
     ctrlLayout->addWidget(startBtn);
     ctrlLayout->addWidget(stopBtn);
+    ctrlLayout->addWidget(restartBtn);
     ctrlLayout->addStretch(); // 简化了一些不用的按钮布局
 
     rightLayout->addWidget(controlBox, 0);
@@ -210,4 +213,21 @@ QWidget* QtWidgetsApplication1::createGroupedWidget(const QString& title, QWidge
     layout->setContentsMargins(2, 10, 2, 2);
     layout->addWidget(contentWidget);
     return groupBox;
+}
+
+void QtWidgetsApplication1::onRestartClicked() {
+    // 1. 调用底层数据重置
+    if (m_sharedData) {
+        m_sharedData->reset();
+    }
+
+    // 2. 强制刷新所有视图，使画面立即回到初始状态
+    if (m_leftMap) m_leftMap->update();
+    if (m_globalSceneMap) m_globalSceneMap->update();
+    if (m_localMap) m_localMap->update();
+
+    // 3. (可选) 如果你希望点击重置后自动暂停，可以取消下面这行的注释
+    // onStopClicked(); 
+
+    qDebug() << "Simulation reset to frame 0.";
 }
