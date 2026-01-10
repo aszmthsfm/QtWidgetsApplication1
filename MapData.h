@@ -43,6 +43,9 @@ struct Vehicle {
     int currentShapeIndex;
     float speed;
     int stuckFrames = 0;
+
+    //失联帧数计数器
+    int missingFrames = 0;
 };
 
 class MapData {

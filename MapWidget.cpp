@@ -177,43 +177,73 @@ void MapWidget::renderSingleLine(const QVector<QPointF>& shape, float offsetValu
     glEnd();
 }
 
-// 核心修改：几何虚线绘制
+// 核心修改：几何虚线绘制 
 void MapWidget::renderGeometricDashedLine(const QVector<QPointF>& shape, float offsetValue, float dashLen, float gapLen) {
     if (shape.size() < 2) return;
     float totalPatternLen = dashLen + gapLen;
-    float distanceAlongPath = 0.0f;
+    // 1. 获取第一段路的方向向量
+    QVector2D dir(shape[1].x() - shape[0].x(), shape[1].y() - shape[0].y());
+    if (dir.lengthSquared() > 0.0001f) {
+        dir.normalize();
+    }
+    else {
+        dir = QVector2D(1.0f, 0.0f); // 防止零向量
+    }
+
+    // 2. 将起点坐标投影到道路方向上 (Dot Product)
+    float worldProjection = shape[0].x() * dir.x() + shape[0].y() * dir.y();
+
+    // 3. 取模得到初始相位 (处理负数情况，确保相位为正)
+    float distanceAlongPath = fmod(worldProjection, totalPatternLen);
+    if (distanceAlongPath < 0.0f) {
+        distanceAlongPath += totalPatternLen;
+    }
+    // ==============================================================
 
     glBegin(GL_LINES);
     for (int i = 0; i < shape.size() - 1; ++i) {
         QPointF p1 = shape[i];
         QPointF p2 = shape[i + 1];
-        QVector2D dir(p2.x() - p1.x(), p2.y() - p1.y());
-        float segmentLen = dir.length();
-        dir.normalize();
-        QVector2D normal(-dir.y(), dir.x());
+        QVector2D dirVec(p2.x() - p1.x(), p2.y() - p1.y());
+        float segmentLen = dirVec.length();
+        dirVec.normalize();
+        QVector2D normal(-dirVec.y(), dirVec.x());
 
         float currentPos = 0.0f;
         while (currentPos < segmentLen) {
+            // 使用 fmod 循环绘制
             float relPos = fmod(distanceAlongPath + currentPos, totalPatternLen);
+
             if (relPos < dashLen) {
+                // 当前在“实线”区间，需要绘制
                 float drawLen = std::min(dashLen - relPos, segmentLen - currentPos);
-                QPointF v1(p1.x() + normal.x() * offsetValue + dir.x() * currentPos,
-                    p1.y() + normal.y() * offsetValue + dir.y() * currentPos);
-                QPointF v2(p1.x() + normal.x() * offsetValue + dir.x() * (currentPos + drawLen),
-                    p1.y() + normal.y() * offsetValue + dir.y() * (currentPos + drawLen));
+
+                // 处理跨越周期边界的情况 (例如 relPos=3, dashLen=5, 只能画2米)
+                // 但上面的 min 逻辑已经涵盖了，这里主要是为了跳过 gap
+
+                QPointF v1(p1.x() + normal.x() * offsetValue + dirVec.x() * currentPos,
+                    p1.y() + normal.y() * offsetValue + dirVec.y() * currentPos);
+
+                QPointF v2(p1.x() + normal.x() * offsetValue + dirVec.x() * (currentPos + drawLen),
+                    p1.y() + normal.y() * offsetValue + dirVec.y() * (currentPos + drawLen));
+
                 glVertex2f(v1.x(), v1.y());
                 glVertex2f(v2.x(), v2.y());
+
                 currentPos += drawLen;
             }
             else {
+                // 当前在“间隔”区间，跳过
                 float skipLen = std::min(totalPatternLen - relPos, segmentLen - currentPos);
                 currentPos += skipLen;
             }
         }
+        // 累加整段路程，保证下一段路的相位连续
         distanceAlongPath += segmentLen;
     }
     glEnd();
 }
+
 
 void MapWidget::drawStopLine(const QVector<QPointF>& shape, float laneWidth, bool isEnd) {
     if (shape.size() < 2 || !m_data) return;

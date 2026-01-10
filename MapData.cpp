@@ -127,17 +127,14 @@ void MapData::updateSimulationStep() {
         return;
     }
 
-    // =========== 【修改步骤 1】保存上一帧的车辆列表 ===========
-    QMap<QString, Vehicle> prevVehiclesMap;
-    for (const auto& v : m_vehicles) {
-        prevVehiclesMap.insert(v.id, v);
-    }
-    // ======================================================
+    // ==========================================
+    //  核心修改：惯性导航算法 (Dead Reckoning)
+    // ==========================================
 
-    // 清空当前车辆列表
-    m_vehicles.clear();
-
+    // 1. 读取当前帧的所有车辆数据到临时 Map 中
+    QMap<QString, Vehicle> currentFrameVehicles;
     QJsonArray vehArray = doc.array();
+
     for (const auto& val : vehArray) {
         if (!val.isObject()) continue;
         QJsonObject obj = val.toObject();
@@ -150,70 +147,79 @@ void MapData::updateSimulationStep() {
         v.length = (float)obj["length"].toDouble(4.5);
         v.width = (float)obj["width"].toDouble(1.8);
         v.speed = (float)obj["velocity"].toDouble();
+        v.currentEdgeId = obj["road_id"].toString();
+        v.currentLaneIndex = obj["lane_index"].toInt(0);
+        v.missingFrames = 0; // 新读到的数据，当然没有失联
 
-        // 颜色生成逻辑
+        // 颜色生成 (保持颜色一致)
         uint hash = qHash(v.id);
         int hue = hash % 360;
         v.color = QColor::fromHsv(hue, 200, 240);
 
-        v.currentEdgeId = obj["road_id"].toString();
-        v.currentLaneIndex = obj["lane_index"].toInt(0);
-
-        m_vehicles.append(v);
+        currentFrameVehicles.insert(v.id, v);
     }
 
-    // =========== 【修改步骤 2】智能排查逻辑 ===========
+    // 2. 遍历上一帧的车辆列表 (m_vehicles)，决定去留
+    QVector<Vehicle> nextVehicles;
 
-    // 1. 找出这一帧里消失的车辆
-    for (auto it = prevVehiclesMap.begin(); it != prevVehiclesMap.end(); ++it) {
-        QString oldId = it.key();
-        Vehicle oldVeh = it.value();
-
-        // 检查这个 ID 是否还在新的一帧里
-        bool stillExists = false;
-        for (const auto& newVeh : m_vehicles) {
-            if (newVeh.id == oldId) {
-                stillExists = true;
-                break;
-            }
+    for (const auto& oldVeh : m_vehicles) {
+        // 情况 A: 这辆车在当前帧数据里存在 -> 更新它
+        if (currentFrameVehicles.contains(oldVeh.id)) {
+            nextVehicles.append(currentFrameVehicles.value(oldVeh.id));
+            currentFrameVehicles.remove(oldVeh.id); // 移除已处理的
         }
-
-        if (!stillExists) {
-            // 这辆车消失了！判断是正常离开还是异常消失
-            // 判断逻辑：如果离地图边缘小于 10 米，算正常离开
+        // 情况 B: 这辆车不见了！ -> 判断是正常离开还是数据缺失
+        else {
+            // 计算离边缘的距离
             float distLeft = abs(oldVeh.x - m_bounds.left());
             float distRight = abs(oldVeh.x - m_bounds.right());
             float distTop = abs(oldVeh.y - m_bounds.top());
             float distBottom = abs(oldVeh.y - m_bounds.bottom());
-
             float minEdgeDist = std::min({ distLeft, distRight, distTop, distBottom });
 
+            // 阈值设为 10 米：如果在边缘 10 米内消失，认为是正常离开
             if (minEdgeDist < 10.0f) {
-                // 离边缘很近，认为是正常离开，不打印 Log 以免刷屏
-                // qDebug() << "Vehicle" << oldId << "left map normally."; 
+                // 正常离开，不加入 nextVehicles，这辆车会被自动删除
             }
             else {
-                // 离边缘很远就没了？这就是 BUG！
-                qDebug() << "!!! ABNORMAL DISAPPEARANCE:" << oldId
-                    << "at (" << oldVeh.x << "," << oldVeh.y << ")"
-                    << "Dist to edge:" << minEdgeDist
-                    << "Frame:" << m_currentFrameIndex;
+                // 异常消失 (在地图中间) -> 启动“幽灵模式”
+                Vehicle ghostVeh = oldVeh;
+                ghostVeh.missingFrames++;
+
+                // 如果失联还没超过 15 帧 (约3秒)，我们帮它“脑补”位置
+                if (ghostVeh.missingFrames < 15) {
+                    // 简单的惯性预测：根据角度和速度计算位移
+                    // SUMO 角度：0是北(+Y)，90是东(+X)，顺时针
+                    // 转换成弧度
+                    float rad = ghostVeh.angle * 3.1415926f / 180.0f;
+
+                    // 注意：sin/cos 的对应关系取决于坐标系，这里按标准 SUMO/GPS 坐标系推算
+                    float dx = ghostVeh.speed * sin(rad);
+                    float dy = ghostVeh.speed * cos(rad);
+
+                    // 如果你的坐标系是标准的数学坐标系，可能需要微调 sin/cos
+                    ghostVeh.x += dx;
+                    ghostVeh.y += dy;
+
+                    // (可选) 可以在这里把 ghostVeh 的颜色变半透明，表示它是预测的
+                    // ghostVeh.color.setAlpha(150); 
+
+                    nextVehicles.append(ghostVeh);
+                }
+                // 如果失联太久，那还是删了吧
             }
         }
     }
 
-    // 2. (可选) 找出这一帧里凭空出现的车辆
-    /*
-    for (const auto& newVeh : m_vehicles) {
-        if (!prevVehiclesMap.contains(newVeh.id)) {
-            // 这是一辆新车
-            float distLeft = abs(newVeh.x - m_bounds.left());
-            // ... 同上计算 minEdgeDist ...
-            // if (minEdgeDist > 10.0f) qDebug() << "!!! ABNORMAL APPEARANCE:" << newVeh.id;
-        }
+    // 3. 把新出现的车（currentFrameVehicles 里剩下的）加进来
+    for (auto it = currentFrameVehicles.begin(); it != currentFrameVehicles.end(); ++it) {
+        nextVehicles.append(it.value());
     }
-    */
-    // ======================================================
+
+    // 4. 更新主列表
+    m_vehicles = nextVehicles;
+
+    // ==========================================
 
     m_currentFrameIndex++;
     m_stepCounter++;
