@@ -40,7 +40,8 @@ public:
         }
         update();
     }
-
+signals:
+    void vehicleSelected(const QString& info);
 protected:
     void initializeGL() override;
     void resizeGL(int w, int h) override;
@@ -68,6 +69,9 @@ private:
 
     //绘制 3D 车辆的辅助函数
     void draw3DVehicle(float length, float width, QColor color);
+
+    // 辅助函数：将屏幕坐标转为地图世界坐标
+    QPointF getWorldPosFromScreen(const QPoint& screenPos);
 
     std::shared_ptr<MapData> m_data;
     AppConfig m_config;

@@ -7,11 +7,13 @@
 #include "MapWidget.h"
 #include "Config.h"
 
+
 class QTimer;
 class QLabel;
 class QSpinBox;
 class QGroupBox;
 class QPushButton;
+class QTextEdit;
 
 class QtWidgetsApplication1 : public QMainWindow
 {
@@ -28,6 +30,8 @@ private slots:
     void onStopClicked();
     void onRestartClicked();
     void onJumpToJunction(const QString& juncId);
+    //处理车辆选中
+    void onVehicleSelected(const QString& info);
 
 private:
     // 辅助函数：创建带标题的容器
@@ -38,6 +42,7 @@ private:
     void initData();
     void initUI();
     void initConnections();
+    QTextEdit* m_txtGlobalScene = nullptr;
 
 private:
     Ui::QtWidgetsApplication1Class ui;

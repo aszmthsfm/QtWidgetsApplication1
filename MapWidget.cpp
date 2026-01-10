@@ -178,7 +178,7 @@ void MapWidget::paintGL() {
     }
 }
 
-// 【新增】透视投影辅助函数
+// 透视投影辅助函数
 void MapWidget::setPerspectiveProjection(int w, int h) {
     if (h == 0) h = 1;
     float aspectRatio = (float)w / (float)h;
@@ -424,10 +424,59 @@ void MapWidget::drawFlatRoads() {
     }
 }
 
-void MapWidget::mousePressEvent(QMouseEvent* event) { if (event->button() == Qt::LeftButton) m_lastMousePos = event->pos(); }
+// MapWidget.cpp -> mousePressEvent
+void MapWidget::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        m_lastMousePos = event->pos();
+
+        // ==========================================
+        // 【新增】点击车辆检测逻辑
+        // ==========================================
+        if (m_data) {
+            // 1. 获取点击的世界坐标
+            QPointF worldPos = getWorldPosFromScreen(event->pos());
+
+            float minDistance = 10000.0f;
+            QString selectedInfo = "";
+            bool found = false;
+
+            // 2. 遍历所有车辆，寻找距离最近的
+            // 设定一个点击阈值，比如 5米 内算点中
+            float threshold = 8.0f;
+
+            for (const auto& veh : m_data->vehicles()) {
+                float dx = veh.x - worldPos.x();
+                float dy = veh.y - worldPos.y();
+                float dist = std::sqrt(dx * dx + dy * dy);
+
+                if (dist < threshold && dist < minDistance) {
+                    minDistance = dist;
+                    // 构建信息字符串
+                    selectedInfo = QString("Vehicle Selected:\n"
+                        "ID: %1\n"
+                        "Pos: (%2, %3)\n"
+                        "Speed: %4 m/s\n"
+                        "Road: %5\n"
+                        "Lane: %6")
+                        .arg(veh.id)
+                        .arg(QString::number(veh.x, 'f', 2))
+                        .arg(QString::number(veh.y, 'f', 2))
+                        .arg(QString::number(veh.speed, 'f', 2))
+                        .arg(veh.currentEdgeId)
+                        .arg(veh.currentLaneIndex);
+                    found = true;
+                }
+            }
+
+            // 3. 如果找到了，发出信号
+            if (found) {
+                emit vehicleSelected(selectedInfo);
+            }
+        }
+    }
+}
 
 // MapWidget.cpp -> mouseMoveEvent
-
 void MapWidget::mouseMoveEvent(QMouseEvent* event) {
     QPoint delta = event->pos() - m_lastMousePos;
     m_lastMousePos = event->pos();
@@ -474,7 +523,6 @@ void MapWidget::mouseMoveEvent(QMouseEvent* event) {
 }
 
 // MapWidget.cpp -> wheelEvent
-
 void MapWidget::wheelEvent(QWheelEvent* event) {
     int delta = event->angleDelta().y();
 
@@ -563,4 +611,106 @@ void MapWidget::draw3DVehicle(float length, float width, QColor color) {
     glVertex3f(halfW, 0.0f, h * 0.4f);
     glVertex3f(-halfW, 0.0f, h * 0.4f);
     glEnd();
+}
+
+// MapWidget.cpp
+
+
+
+QPointF MapWidget::getWorldPosFromScreen(const QPoint& screenPos) {
+    float winW = (float)width();
+    float winH = (float)height();
+    float x = screenPos.x();
+    float y = screenPos.y();
+
+    // 1. 如果是 2D 模式
+    if (!m_is3D) {
+        // 逆向计算：(屏幕坐标 - 屏幕中心) / 缩放 + 地图中心
+        // 还需要处理旋转 (这里简化处理，假设旋转也是绕中心的)
+
+        // 归一化设备坐标 (NDC)
+        float ndcX = (x - winW / 2.0f);
+        float ndcY = (winH / 2.0f - y); // 屏幕Y向下，OpenGL Y向上
+
+        // 缩放
+        float worldX = ndcX / m_scale;
+        float worldY = ndcY / m_scale;
+
+        // 旋转 (逆旋转)
+        float rad = -m_rotation * M_PI / 180.0f;
+        float rotX = worldX * cos(rad) - worldY * sin(rad);
+        float rotY = worldX * sin(rad) + worldY * cos(rad);
+
+        return QPointF(rotX + m_centerX, rotY + m_centerY);
+    }
+
+    // 2. 如果是 3D 模式 (射线与地面的交点)
+    else {
+        // 这是一个简化的射线投射 (Ray Casting)
+        // 假设地面是 Z=0 平面
+
+        // 步骤 A: 计算标准化设备坐标 (NDC: -1 到 1)
+        float ndcX = (2.0f * x) / winW - 1.0f;
+        float ndcY = 1.0f - (2.0f * y) / winH;
+
+        // 步骤 B: 视锥体参数 (需与 paintGL 中的 setPerspectiveProjection 保持一致)
+        float fov = 45.0f;
+        float aspect = winW / winH;
+        float tanHalfFov = tan(qDegreesToRadians(fov / 2.0f));
+
+        // 摄像机空间中的射线方向
+        float viewX = ndcX * aspect * tanHalfFov;
+        float viewY = ndcY * tanHalfFov;
+        float viewZ = -1.0f; // 指向屏幕内
+
+        QVector3D rayDir(viewX, viewY, viewZ);
+        rayDir.normalize();
+
+        // 步骤 C: 将射线从摄像机空间变换到世界空间
+        // 这里的逆变换顺序要跟 paintGL 里的变换顺序严格相反
+
+        // 1. 逆俯仰角 (Pitch) - 绕X轴转
+        float pitchRad = qDegreesToRadians(m_pitch);
+        float y1 = rayDir.y() * cos(pitchRad) - rayDir.z() * sin(pitchRad);
+        float z1 = rayDir.y() * sin(pitchRad) + rayDir.z() * cos(pitchRad);
+        rayDir.setY(y1); rayDir.setZ(z1);
+
+        // 2. 逆旋转 (Rotation) - 绕Z轴转
+        float rotRad = qDegreesToRadians(-m_rotation); // 注意负号
+        float x2 = rayDir.x() * cos(rotRad) - rayDir.y() * sin(rotRad);
+        float y2 = rayDir.x() * sin(rotRad) + rayDir.y() * cos(rotRad);
+        rayDir.setX(x2); rayDir.setY(y2);
+
+        // 3. 计算摄像机的位置 (在世界坐标系中)
+        // 摄像机默认在 (0,0, m_cameraZ)，然后平移到了 (centerX, centerY)
+        // 其实只需要计算射线与 Z=0 平面的交点
+
+        // 摄像机当前高度
+        float camHeight = m_cameraZ;
+
+        // 避免除以0
+        if (std::abs(rayDir.z()) < 0.0001f) return QPointF(0, 0);
+
+        // 计算 t 值: origin.z + t * dir.z = 0  =>  t = -origin.z / dir.z
+        // 这里的 origin.z 就是摄像机高度 camHeight
+        float t = -camHeight / rayDir.z();
+
+        // 计算落点
+        // 摄像机水平位置在 (m_centerX, m_centerY) 偏移了一定距离
+        // 这是一个近似解，更严谨的需要完整的矩阵逆运算，但对于目前的功能足够了
+        // 我们需要把摄像机的偏移加上
+
+        // 实际上，射线出发点相对于 (centerX, centerY) 的偏移主要由俯仰角的旋转造成
+        // 这里做一个简化的近似：
+        // 交点 = 摄像机位置 + t * 射线方向
+
+        // 摄像机在世界坐标的大致位置 (忽略复杂的旋转平移矩阵，只看中心点)
+        // 为了简化，我们直接用射线投射产生的偏移量
+
+        float hitX = t * rayDir.x();
+        float hitY = t * rayDir.y();
+
+        // 加上地图中心偏移
+        return QPointF(m_centerX + hitX, m_centerY + hitY);
+    }
 }

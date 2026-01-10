@@ -10,6 +10,7 @@
 #include <QTextEdit>
 #include <QTimer>
 #include <QDebug>
+#include <QTime>
 
 QtWidgetsApplication1::QtWidgetsApplication1(QWidget* parent)
     : QMainWindow(parent)
@@ -184,9 +185,10 @@ void QtWidgetsApplication1::initUI() {
     QWidget* dataZone = new QWidget();
     QHBoxLayout* dataLayout = new QHBoxLayout(dataZone);
 
-    QTextEdit* globalText = new QTextEdit();
-    globalText->setText("System Ready... Loading data from D:/2025data/oop/Json");
-    dataLayout->addWidget(createGroupedWidget("Global Text Scene", globalText), 1);
+    m_txtGlobalScene = new QTextEdit();
+    m_txtGlobalScene->setText("System Ready... Click a vehicle to see details.");
+    m_txtGlobalScene->setReadOnly(true); //设置只读
+    dataLayout->addWidget(createGroupedWidget("Global Text Scene", m_txtGlobalScene), 1);
 
     QWidget* localZone = new QWidget();
     QVBoxLayout* localLayout = new QVBoxLayout(localZone);
@@ -222,6 +224,8 @@ void QtWidgetsApplication1::initUI() {
     rightLayout->addWidget(dataZone, 3);
 
     mainLayout->addWidget(rightPanel, 1);
+
+
 }
 
 void QtWidgetsApplication1::initConnections() {
@@ -236,6 +240,7 @@ void QtWidgetsApplication1::initConnections() {
     connect(m_spinFPS, &QSpinBox::valueChanged, [=](int val) {
         if (val > 0) m_simTimer->setInterval(1000 / val);
         });
+    connect(m_leftMap, &MapWidget::vehicleSelected, this, &QtWidgetsApplication1::onVehicleSelected);
 }
 
 // 槽函数实现
@@ -287,4 +292,12 @@ void QtWidgetsApplication1::onRestartClicked() {
     // onStopClicked(); 
 
     qDebug() << "Simulation reset to frame 0.";
+}
+
+void QtWidgetsApplication1::onVehicleSelected(const QString& info) {
+    if (m_txtGlobalScene) {
+        m_txtGlobalScene->setText(info);
+        // 可以加个时间戳
+        m_txtGlobalScene->append("\nQuery Time: " + QTime::currentTime().toString());
+    }
 }
