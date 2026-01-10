@@ -66,6 +66,9 @@ private:
     // 绘制停止线（密集竖线，带边界过滤）
     void drawStopLine(const QVector<QPointF>& shape, float laneWidth, bool isEnd);
 
+    //绘制 3D 车辆的辅助函数
+    void draw3DVehicle(float length, float width, QColor color);
+
     std::shared_ptr<MapData> m_data;
     AppConfig m_config;
 

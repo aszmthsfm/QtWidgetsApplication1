@@ -141,34 +141,39 @@ void MapWidget::paintGL() {
         glPushMatrix();
         glTranslatef(veh.x, veh.y, 0.0f);
         glRotatef(-veh.angle, 0.0f, 0.0f, 1.0f);
-        glColor3f(veh.color.redF(), veh.color.greenF(), veh.color.blueF());
-        float len = veh.length;
-        float halfWid = veh.width / 2.0f;
 
-        // 画个简单的立体盒子车
+        // ==========================================
+        // 【修改】根据 2D/3D 状态选择绘制方式
+        // ==========================================
         if (m_is3D) {
-            // 车顶
-            glBegin(GL_QUADS);
-            glVertex3f(-halfWid, -len, 1.5f);
-            glVertex3f(halfWid, -len, 1.5f);
-            glVertex3f(halfWid, 0.0f, 1.5f);
-            glVertex3f(-halfWid, 0.0f, 1.5f);
-            glEnd();
-            // (为了简化代码，侧面暂时省略，或者你可以自己加 GL_QUADS 画侧面)
+            // 3D 模式：画立体小车
+            draw3DVehicle(veh.length, veh.width, veh.color);
         }
+        else {
+            // 2D 模式：保持原来的平面画法
+            glColor3f(veh.color.redF(), veh.color.greenF(), veh.color.blueF());
+            float len = veh.length;
+            float halfWid = veh.width / 2.0f;
 
-        // 原始的 2D 车身
-        glRectf(-halfWid, -len, halfWid, 0.0f);
+            // 实心车身
+            glRectf(-halfWid, -len, halfWid, 0.0f);
 
-        // 黑色轮廓
-        glColor3f(0, 0, 0);
-        glLineWidth(1.0f);
-        glBegin(GL_LINE_LOOP);
-        glVertex2f(-halfWid, -len);
-        glVertex2f(halfWid, -len);
-        glVertex2f(halfWid, 0.0f);
-        glVertex2f(-halfWid, 0.0f);
-        glEnd();
+            // 黑色轮廓
+            glColor3f(0, 0, 0);
+            glLineWidth(1.0f);
+            glBegin(GL_LINE_LOOP);
+            glVertex2f(-halfWid, -len);
+            glVertex2f(halfWid, -len);
+            glVertex2f(halfWid, 0.0f);
+            glVertex2f(-halfWid, 0.0f);
+            glEnd();
+
+            // 可选：画个小箭头表示车头方向
+            glBegin(GL_LINES);
+            glVertex2f(0.0f, -len * 0.5f);
+            glVertex2f(0.0f, 0.0f);
+            glEnd();
+        }
         glPopMatrix();
     }
 }
@@ -488,4 +493,74 @@ void MapWidget::wheelEvent(QWheelEvent* event) {
         else m_scale /= 1.1f;
     }
     update();
+}
+
+// MapWidget.cpp
+
+void MapWidget::draw3DVehicle(float length, float width, QColor color) {
+    float h = 1.6f; // 假设车高 1.6米 (轿车标准)
+    float halfW = width / 2.0f;
+
+    // 坐标系说明：
+    // 原点(0,0) 是车头中心
+    // Y轴负方向是车尾 (-length)
+    // Z轴向上是高度
+
+    // 1. 车顶 (Top) - 最亮
+    glColor3f(color.redF(), color.greenF(), color.blueF());
+    glBegin(GL_QUADS);
+    glVertex3f(-halfW, 0.0f, h);    // 左前上
+    glVertex3f(halfW, 0.0f, h);     // 右前上
+    glVertex3f(halfW, -length, h);  // 右后上
+    glVertex3f(-halfW, -length, h); // 左后上
+    glEnd();
+
+    // 2. 左侧面 (Left) - 稍微调暗 (85% 亮度)
+    QColor sideColor = color.darker(115);
+    glColor3f(sideColor.redF(), sideColor.greenF(), sideColor.blueF());
+    glBegin(GL_QUADS);
+    glVertex3f(-halfW, 0.0f, h);
+    glVertex3f(-halfW, -length, h);
+    glVertex3f(-halfW, -length, 0.0f);
+    glVertex3f(-halfW, 0.0f, 0.0f);
+    glEnd();
+
+    // 3. 右侧面 (Right) - 同左侧
+    glBegin(GL_QUADS);
+    glVertex3f(halfW, 0.0f, h);
+    glVertex3f(halfW, 0.0f, 0.0f);
+    glVertex3f(halfW, -length, 0.0f);
+    glVertex3f(halfW, -length, h);
+    glEnd();
+
+    // 4. 车尾 (Back) - 再暗一点 (70% 亮度)
+    QColor backColor = color.darker(130);
+    glColor3f(backColor.redF(), backColor.greenF(), backColor.blueF());
+    glBegin(GL_QUADS);
+    glVertex3f(-halfW, -length, h);
+    glVertex3f(halfW, -length, h);
+    glVertex3f(halfW, -length, 0.0f);
+    glVertex3f(-halfW, -length, 0.0f);
+    glEnd();
+
+    // 5. 车头 (Front) - 稍微亮一点，或者画个“挡风玻璃”
+    // 这里我们简单处理：上面 2/3 画玻璃色，下面 1/3 画车身色
+
+    // 车身部分
+    glColor3f(sideColor.redF(), sideColor.greenF(), sideColor.blueF());
+    glBegin(GL_QUADS);
+    glVertex3f(-halfW, 0.0f, h * 0.4f);
+    glVertex3f(halfW, 0.0f, h * 0.4f);
+    glVertex3f(halfW, 0.0f, 0.0f);
+    glVertex3f(-halfW, 0.0f, 0.0f);
+    glEnd();
+
+    // 挡风玻璃部分 (浅蓝色)
+    glColor3f(0.7f, 0.8f, 0.9f);
+    glBegin(GL_QUADS);
+    glVertex3f(-halfW, 0.0f, h);
+    glVertex3f(halfW, 0.0f, h);
+    glVertex3f(halfW, 0.0f, h * 0.4f);
+    glVertex3f(-halfW, 0.0f, h * 0.4f);
+    glEnd();
 }
