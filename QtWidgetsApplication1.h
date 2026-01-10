@@ -11,6 +11,7 @@ class QTimer;
 class QLabel;
 class QSpinBox;
 class QGroupBox;
+class QPushButton;
 
 class QtWidgetsApplication1 : public QMainWindow
 {
@@ -52,6 +53,8 @@ private:
     MapWidget* m_localMap = nullptr;      // 右下局部视图
 
     QSpinBox* m_spinFPS = nullptr;
+    //2/3d切换
+    QPushButton* m_btnToggleView = nullptr;
 
     // 布局相关参数
     float m_mapHeight = 100.0f;

@@ -28,6 +28,7 @@ public:
     void fitMap();
     void setRotation(float angle);
     void setFocus(float x, float y, float zoomVal);
+    void set3D(bool enable) { m_is3D = enable; update(); }
 
 protected:
     void initializeGL() override;
@@ -65,4 +66,5 @@ private:
     float m_centerY;
     QPoint m_lastMousePos;
     float m_rotation = 0.0f;
+    bool m_is3D = false;
 };

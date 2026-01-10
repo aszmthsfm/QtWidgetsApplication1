@@ -69,6 +69,63 @@ void QtWidgetsApplication1::initUI() {
     m_leftMap->setConfig(m_config);
     m_leftMap->setData(m_sharedData);
 
+
+    // ---------------------------------------------------------
+     // 【修改】在左侧地图上添加悬浮按钮 (默认显示 2D)
+     // ---------------------------------------------------------
+     // 1. 创建按钮，父对象设为 m_leftMap
+     // 【改动点】这里文字直接设为 "2D View"，明确当前默认是 2D
+    m_btnToggleView = new QPushButton("2D View", m_leftMap);
+
+    // 2. 设置位置 (左上角)
+    m_btnToggleView->setGeometry(20, 20, 80, 30);
+
+    // 3. 设置为“开关”模式
+    m_btnToggleView->setCheckable(true);
+
+    // 【改动点】确保初始状态是“未按下”，配合文字 "2D View" 表示默认状态
+    m_btnToggleView->setChecked(false);
+
+    // 4. 设置样式
+    // 这里的样式逻辑是：
+    // 未按下(默认 2D) -> 白底黑字
+    // 按下(切换到 3D) -> 蓝底白字
+    m_btnToggleView->setStyleSheet(
+        "QPushButton {"
+        "   background-color: rgba(255, 255, 255, 220);"
+        "   border: 1px solid #8f8f91;"
+        "   border-radius: 4px;"
+        "   font-weight: bold;"
+        "   color: black;"
+        "}"
+        "QPushButton:checked {"
+        "   background-color: #4a90e2;"
+        "   color: white;"
+        "}"
+        "QPushButton:hover {"
+        "   background-color: white;"
+        "}"
+    );
+
+    m_btnToggleView->show();
+
+    // 【新增】连接逻辑：点击按钮切换 2D/3D 文字和地图状态
+    // =========================================================
+    connect(m_btnToggleView, &QPushButton::toggled, [=](bool checked) {
+        if (checked) {
+            // 按钮被按下 -> 进入 3D 模式
+            m_btnToggleView->setText("3D View");
+            m_leftMap->set3D(true);
+        }
+        else {
+            // 按钮弹起 -> 回到 2D 模式
+            m_btnToggleView->setText("2D View");
+            m_leftMap->set3D(false);
+        }
+        });
+
+    // ---------------------------------------------------------
+
     // 自动缩放
     float mainMapScale = (float)height() / std::max(1.0f, m_mapHeight) * 0.95f;
     m_leftMap->setFocus(m_centerPos.x(), m_centerPos.y(), mainMapScale);

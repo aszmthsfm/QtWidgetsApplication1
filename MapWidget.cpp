@@ -86,10 +86,23 @@ void MapWidget::paintGL() {
     if (m_scale <= 0.001f) m_scale = 0.001f;
     float viewHalfW = (width() / m_scale) / 2.0f;
     float viewHalfH = (height() / m_scale) / 2.0f;
-    glOrtho(-viewHalfW, viewHalfW, -viewHalfH, viewHalfH, -1.0, 1.0);
+    glOrtho(-viewHalfW, viewHalfW, -viewHalfH, viewHalfH, -2000.0, 2000.0);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+    // =========================================================
+    // 【新增】3D 倾斜逻辑
+    // 如果是 3D 模式，先绕 X 轴倒下 55 度，产生透视感
+    // =========================================================
+    if (m_is3D) {
+        // 参数：角度, x轴, y轴, z轴
+        glRotatef(-55.0f, 1.0f, 0.0f, 0.0f);
+
+        // 可选：稍微向下平移一点，保证旋转中心在视野内舒服的位置
+        glTranslatef(0.0f, 0.0f, -200.0f);
+    }
+
+  
     glRotatef(m_rotation, 0.0f, 0.0f, 1.0f);
     glTranslatef(-m_centerX, -m_centerY, 0.0f);
 
