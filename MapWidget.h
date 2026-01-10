@@ -2,26 +2,31 @@
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
-#include <memory> //用于 std::shared_ptr
-#include "MapData.h" // 包含数据定义
+#include <QOpenGLTexture>
+#include <memory>
+#include <QVector2D>
+#include "MapData.h"
+#include "Config.h"
 
 class MapWidget : public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
 
 public:
+    enum RenderStyle {
+        STYLE_FLAT,
+        STYLE_REALISTIC
+    };
+
     MapWidget(QWidget* parent = nullptr);
     ~MapWidget();
 
-    // 【关键修改】不再加载文件，而是接收数据指针
     void setData(std::shared_ptr<MapData> data);
+    void setConfig(const AppConfig& config) { m_config = config; }
+    void setStyle(RenderStyle style) { m_style = style; update(); }
 
-    // 重置视角以适应地图
     void fitMap();
-    // 设置旋转角度 (单位：度)
     void setRotation(float angle);
-
-    // 强制聚焦到某个点，并设置缩放等级 (zoomVal越大看的内容越少/越近)
     void setFocus(float x, float y, float zoomVal);
 
 protected:
@@ -34,8 +39,26 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
-    // 使用智能指针共享数据
+    void drawRealisticRoads();
+    void drawFlatRoads();
+
+    // 绘制路面面片
+    void drawWideLane(const QVector<QPointF>& shape, float width, QColor color);
+
+    // 绘制实线（边界、中心线）
+    void renderSingleLine(const QVector<QPointF>& shape, float offsetValue);
+
+    // 绘制几何虚线（解决缩放问题，长度基于地图米）
+    void renderGeometricDashedLine(const QVector<QPointF>& shape, float offsetValue, float dashLen, float gapLen);
+
+    // 绘制停止线（密集竖线，带边界过滤）
+    void drawStopLine(const QVector<QPointF>& shape, float laneWidth, bool isEnd);
+
     std::shared_ptr<MapData> m_data;
+    AppConfig m_config;
+
+    RenderStyle m_style = STYLE_FLAT;
+    QOpenGLTexture* m_roadTexture = nullptr;
 
     float m_scale;
     float m_centerX;

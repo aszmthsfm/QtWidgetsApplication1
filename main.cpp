@@ -7,15 +7,16 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
-#include <QCheckBox> // 新增：用于 to Files 复选框
+#include <QCheckBox>
 #include <QTextEdit>
 #include <QTimer>
 #include <memory>
 #include <QDebug>
-#include <algorithm> // 用于 std::max
+#include <algorithm>
 
 #include "MapWidget.h"
 #include "MapData.h"
+#include "ConfigLoader.h"
 
 // 辅助函数：创建带标题的容器
 QWidget* createGroupedWidget(const QString& title, QWidget* contentWidget) {
@@ -30,9 +31,21 @@ int main(int argc, char* argv[])
 {
     QApplication a(argc, argv);
 
-    // 1. 加载数据
+    // 1. 加载配置
+    // 确保 config.json 在运行目录下
+    AppConfig config = ConfigLoader::load("config.json");
+
+    // 2. 初始化数据
     auto sharedData = std::make_shared<MapData>();
-    bool loaded = sharedData->load("road.net.xml");
+    // 注入配置到 MapData
+    sharedData->setConfig(config);
+
+    // 加载地图
+    bool loaded = sharedData->load(config.map.netFilePath);
+
+    // 【新增】初始化数据回放路径
+    // 注意：Windows路径中的反斜杠需要转义，或者使用正斜杠
+    sharedData->initPlayback("D:/2025data/oop/Json");
 
     QRectF bounds = sharedData->bounds();
     float cx = 0.0f;
@@ -45,22 +58,27 @@ int main(int argc, char* argv[])
         mapH = bounds.height();
     }
 
+    // 3. 设置主窗口
     QMainWindow window;
-    window.resize(1600, 900);
-    window.setWindowTitle("SUMO Dashboard (Qt6 + OpenGL)");
+    window.resize(config.window.width, config.window.height);
+    window.setWindowTitle(config.window.title);
 
     QWidget* centralWidget = new QWidget();
     window.setCentralWidget(centralWidget);
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
 
     // ==========================================
-    // 左侧：主地图 (Main View)
+    // 左侧：主地图 (Main View) - 真实风格
     // ==========================================
     MapWidget* leftMap = new MapWidget();
-    leftMap->setData(sharedData);
 
-    // 【修改 1】主地图放大逻辑
-    // 使用窗口高度 (900) 计算比例，使地图在垂直方向撑满
+    // 【关键设置】启用真实渲染风格 (需要 asphalt.jpg)
+    leftMap->setStyle(MapWidget::STYLE_REALISTIC);
+
+    leftMap->setConfig(config); // 注入配置
+    leftMap->setData(sharedData); // 注入数据
+
+    // 自动计算缩放，使地图垂直充满屏幕
     float mainMapScale = (float)window.height() / std::max(1.0f, mapH) * 0.95f;
     leftMap->setFocus(cx, cy, mainMapScale);
 
@@ -72,76 +90,79 @@ int main(int argc, char* argv[])
     QWidget* rightPanel = new QWidget();
     QVBoxLayout* rightLayout = new QVBoxLayout(rightPanel);
 
-    // --- 右上：全局横向视图 (Global Scene) ---
+    // --- 右上：全局横向视图 (Global Scene) - 扁平风格 ---
     MapWidget* globalSceneMap = new MapWidget();
+
+    // 【关键设置】保持扁平风格
+    globalSceneMap->setStyle(MapWidget::STYLE_FLAT);
+
+    globalSceneMap->setConfig(config);
     globalSceneMap->setData(sharedData);
     globalSceneMap->setRotation(-90.0f); // 旋转 -90 度
 
-    // 【修改 2】Global Map 缩放适配
-    // 旋转后，地图高度变为屏幕宽度。预估右侧面板宽约 600px
+    // 计算缩放，适配右侧面板宽度
     float globalScale = 600.0f / std::max(1.0f, mapH) * 0.9f;
     globalSceneMap->setFocus(cx, cy, globalScale);
 
     rightLayout->addWidget(createGroupedWidget("Global Image Scene (Rotated -90)", globalSceneMap), 2);
 
     // --- 中间：控制栏 (Control Panel) ---
-    // 【修改 3】完全重构 Control Panel 布局，仿照参考图
     QGroupBox* controlBox = new QGroupBox("Control Panel");
     controlBox->setFixedHeight(80);
     QHBoxLayout* ctrlLayout = new QHBoxLayout(controlBox);
 
-    // 1. 左侧：Render Scene @ [ 5 ] FPS
+    // 1. FPS 设置
     QLabel* labelRender = new QLabel("Render Scene @");
     QSpinBox* spinFPS = new QSpinBox();
     spinFPS->setRange(1, 60);
-    spinFPS->setValue(5);      // 默认 5 FPS
+    spinFPS->setValue(config.sim.targetFPS);
     spinFPS->setFixedWidth(50);
     QLabel* labelFPS = new QLabel("FPS");
 
-    // 2. 中间：Start / Stop
+    // 2. 按钮
     QPushButton* startBtn = new QPushButton("Start");
     QPushButton* stopBtn = new QPushButton("Stop");
 
-    // 3. 右侧：[ ] to Files / Files
+    // 3. 文件选项
     QCheckBox* checkToFiles = new QCheckBox("to Files");
     QPushButton* filesBtn = new QPushButton("Files");
 
-    // 添加控件到布局
     ctrlLayout->addWidget(labelRender);
     ctrlLayout->addWidget(spinFPS);
     ctrlLayout->addWidget(labelFPS);
-
-    ctrlLayout->addSpacing(20); // 间距
+    ctrlLayout->addSpacing(20);
     ctrlLayout->addWidget(startBtn);
     ctrlLayout->addWidget(stopBtn);
-
-    ctrlLayout->addSpacing(20); // 间距
+    ctrlLayout->addSpacing(20);
     ctrlLayout->addWidget(checkToFiles);
     ctrlLayout->addWidget(filesBtn);
-
-    ctrlLayout->addStretch(); // 靠左对齐
+    ctrlLayout->addStretch();
 
     rightLayout->addWidget(controlBox, 0);
 
-    // --- 右下：分区域监控 (Local Scene) ---
+    // --- 右下：分区域监控 (Local Scene) - 扁平风格 ---
     QWidget* dataZone = new QWidget();
     QHBoxLayout* dataLayout = new QHBoxLayout(dataZone);
 
     QTextEdit* globalText = new QTextEdit();
-    globalText->setText("System Ready...");
+    globalText->setText("System Ready... Loading data from D:/2025data/oop/Json");
     dataLayout->addWidget(createGroupedWidget("Global Text Scene", globalText), 1);
 
     QWidget* localZone = new QWidget();
     QVBoxLayout* localLayout = new QVBoxLayout(localZone);
 
     MapWidget* localMap = new MapWidget();
+
+    // 【关键设置】保持扁平风格
+    localMap->setStyle(MapWidget::STYLE_FLAT);
+
+    localMap->setConfig(config);
     localMap->setData(sharedData);
 
-    // 【修改 4】局部路口镜头调整
-    // 缩放设为 5.0f (拉远镜头)，以便看清整个路口
-    float junctionZoomLevel = 5.0f;
+    // 使用配置中的默认缩放等级
+    float junctionZoomLevel = config.map.defaultLocalZoom;
 
-    // 默认显示第一个路口 J2
+    // 默认显示 J2 路口
     QPointF startPt = sharedData->getJunctionPosition("J2");
     localMap->setFocus(startPt.x(), startPt.y(), junctionZoomLevel);
 
@@ -177,20 +198,18 @@ int main(int argc, char* argv[])
     // 逻辑连接
     // ==========================================
 
-    // 1. 车辆仿真定时器
     QTimer* simTimer = new QTimer(&window);
 
-    // 初始化定时器间隔 (1000ms / FPS)
+    // 初始化 FPS
     int initialInterval = 1000 / spinFPS->value();
     simTimer->setInterval(initialInterval);
 
-    // 【修改 5】FPS 动态调整逻辑
+    // FPS 动态调整
     QObject::connect(spinFPS, &QSpinBox::valueChanged, [=](int val) {
-        if (val > 0) {
-            simTimer->setInterval(1000 / val);
-        }
+        if (val > 0) simTimer->setInterval(1000 / val);
         });
 
+    // 仿真循环
     QObject::connect(simTimer, &QTimer::timeout, [&]() {
         sharedData->updateSimulationStep();
         // 刷新所有视图
@@ -202,11 +221,11 @@ int main(int argc, char* argv[])
     QObject::connect(startBtn, &QPushButton::clicked, [=]() { simTimer->start(); });
     QObject::connect(stopBtn, &QPushButton::clicked, [=]() { simTimer->stop(); });
 
-    // 2. 按钮跳转逻辑 (使用修正后的缩放比例)
+    // 路口跳转逻辑
     auto jumpToJunction = [=](const QString& juncId) {
         QPointF pt = sharedData->getJunctionPosition(juncId);
-        // 如果数据未加载或找不到ID，避免跳到 (0,0)
-        if (pt.isNull() && pt.x() == 0 && pt.y() == 0) pt.setX(cx); // 保持在 X 中心
+        // 如果找不到路口，防止跳到 (0,0)
+        if (pt.isNull() && pt.x() == 0 && pt.y() == 0) pt.setX(cx);
 
         localMap->setFocus(pt.x(), pt.y(), junctionZoomLevel);
         qDebug() << "Jump to" << juncId << "at" << pt;

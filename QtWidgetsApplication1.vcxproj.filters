@@ -29,9 +29,6 @@
     <QtUic Include="QtWidgetsApplication1.ui">
       <Filter>Form Files</Filter>
     </QtUic>
-    <QtMoc Include="QtWidgetsApplication1.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
     <ClCompile Include="QtWidgetsApplication1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -46,8 +43,17 @@
     <ClCompile Include="MapData.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ConfigLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConfigLoader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="MapData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -56,5 +62,13 @@
     <QtMoc Include="MapWidget.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="QtWidgetsApplication1.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="config.json">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

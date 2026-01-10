@@ -1,0 +1,28 @@
+﻿{
+  "window": {
+    "width": 1600,
+    "height": 900,
+    "title": "SUMO Dashboard (Configured)"
+  },
+  "simulation": {
+    "targetFPS": 5,
+    "vehicleCount": 20
+  },
+  "vehicle": {
+    "length": 5.0,
+    "width": 2.0,
+    "minSpeed": 0.8,
+    "maxSpeed": 1.5,
+    "colors": [ "#FF0000", "#0000FF", "#008000", "#00FFFF", "#FF00FF", "#FFFF00", "#8B0000" ]
+  },
+  "map": {
+    "netFilePath": "road.net.xml",
+    "backgroundColor": "#D9EDD9",
+    "junctionColor": "#808080",
+    "internalLaneColor": "#99CC99",
+    "roadColor": "#999999",
+    "internalLineWidth": 1.0,
+    "roadLineWidth": 3.0,
+    "defaultLocalZoom": 5.0
+  }
+}

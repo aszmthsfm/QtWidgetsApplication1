@@ -1,15 +1,14 @@
-#pragma once
+ï»¿#pragma once
 #include <QString>
 #include <QVector>
 #include <QPointF>
-#include <QRectF> // <--- ±ØĞëÌí¼ÓÕâÒ»ĞĞ£¬·ñÔò»á±¨ "Î´¶¨ÒåÀàĞÍ QRectF"
-#include <QDomDocument>
-#include <QFile>
-#include <QDebug>
-#include <QtGlobal>
+#include <QRectF>
 #include <QColor>
+#include <QRandomGenerator>
+#include <QStringList> 
+#include "Config.h"
+#include <QMap>
 
-// --- »ù´¡Êı¾İ½á¹¹ (´Ó MapWidget ÒÆ³öÀ´µÄ) ---
 struct Lane {
     QString id;
     float width;
@@ -18,6 +17,8 @@ struct Lane {
 
 struct Edge {
     QString id;
+    QString fromJunc;
+    QString toJunc;
     QString function;
     QVector<Lane> lanes;
 };
@@ -26,68 +27,54 @@ struct Junction {
     QString id;
     QVector<QPointF> shape;
 };
-//³µÁ¾½á¹¹Ìå
+
 struct Vehicle {
     QString id;
     float x;
     float y;
-    float angle;  // ½Ç¶È (0-360)
+    float angle;  // å¯¹åº” JSON ä¸­çš„ heading
     float length;
     float width;
-    QColor color; // ³µÁ¾ÑÕÉ« (ºì/À¶)
+    QColor color;
+
+    // ä»¥ä¸‹å­—æ®µåœ¨å›æ”¾æ¨¡å¼ä¸‹å¯èƒ½ä»…ç”¨äºæ˜¾ç¤ºï¼Œä¸å†ç”¨äºç‰©ç†è®¡ç®—
+    QString currentEdgeId;
+    int currentLaneIndex;
+    int currentShapeIndex;
+    float speed;
+    int stuckFrames = 0;
 };
 
 class MapData {
 public:
     MapData();
+    void setConfig(const AppConfig& config) { m_config = config; }
     bool load(const QString& filePath);
+    void initPlayback(const QString& directoryPath);
 
     const QVector<Edge>& edges() const { return m_edges; }
     const QVector<Junction>& junctions() const { return m_junctions; }
+    const QVector<Vehicle>& vehicles() const { return m_vehicles; }
     QRectF bounds() const { return m_bounds; }
 
-    // --- ĞÂÔö£º³µÁ¾Ïà¹Ø½Ó¿Ú ---
-    const QVector<Vehicle>& vehicles() const { return m_vehicles; }
-
-    // ÓÃÓÚ²âÊÔ£º¸üĞÂ³µÁ¾Î»ÖÃ (Ä£Äâ·ÂÕæ)
-    void updateSimulationStep() {
-        // ÕâÀïÎÒÃÇÏÈĞ´ËÀÒ»Á¾³µÔÚµØÍ¼ÉÏ×ªÈ¦£¬»òÕßÑØÖ±Ïß×ß£¬ÓÃÀ´²âÊÔäÖÈ¾
-        // Êµ¼ÊÏîÄ¿ÖĞ£¬ÕâÀïÓ¦¸Ã½âÎö SUMO µÄÊµÊ±Êı¾İ
-        if (m_vehicles.isEmpty()) {
-            // ³õÊ¼»¯Ò»Á¾²âÊÔ³µ
-            m_vehicles.append({ "test_car_1", 50, 50, 0, 5.0, 2.0, Qt::red });
-        }
-
-        // ÈÃ³µ¼òµ¥µÄÑØ Y ÖáÒÆ¶¯
-        for (auto& veh : m_vehicles) {
-            veh.y += 0.5f; // Ã¿´ÎÒÆ¶¯ 0.5 Ã×
-            if (veh.y > 200) veh.y = 0; // Ñ­»·
-        }
-    }
-    // ¸ù¾İ ID »ñÈ¡Â·¿ÚµÄÖĞĞÄ×ø±ê
-    QPointF getJunctionPosition(const QString& id) {
-        for (const auto& junc : m_junctions) {
-            if (junc.id == id) {
-                // ¼ÆËã¶à±ßĞÎµÄ¼¸ºÎÖĞĞÄ
-                float sumX = 0, sumY = 0;
-                if (junc.shape.isEmpty()) return QPointF(0, 0);
-
-                for (const auto& pt : junc.shape) {
-                    sumX += pt.x();
-                    sumY += pt.y();
-                }
-                return QPointF(sumX / junc.shape.size(), sumY / junc.shape.size());
-            }
-        }
-        return QPointF(0, 0);
-    }
+    void updateSimulationStep();
+    QPointF getJunctionPosition(const QString& id);
 
 private:
     void parseShape(const QString& shapeStr, QVector<QPointF>& outPoints);
+    void spawnVehicle();
 
     QVector<Edge> m_edges;
     QVector<Junction> m_junctions;
-    // --- ĞÂÔö£º³µÁ¾ÁĞ±í ---
     QVector<Vehicle> m_vehicles;
     QRectF m_bounds;
+    AppConfig m_config;
+    int m_stepCounter = 0;
+
+    QString m_dataDir;
+    QStringList m_jsonFiles;
+    int m_currentFrameIndex = 0;
+
+    // é¢œè‰²ç¼“å­˜ï¼šKeyæ˜¯è½¦è¾†IDï¼ŒValueæ˜¯é¢œè‰²
+    //QMap<QString, QColor> m_vehicleColorCache;
 };

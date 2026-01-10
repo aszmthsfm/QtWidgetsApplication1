@@ -40,6 +40,11 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
   </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="Configuration">
     <ClCompile>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -56,6 +61,7 @@
     <QtRcc Include="QtWidgetsApplication1.qrc" />
     <QtUic Include="QtWidgetsApplication1.ui" />
     <QtMoc Include="QtWidgetsApplication1.h" />
+    <ClCompile Include="ConfigLoader.cpp" />
     <ClCompile Include="MapData.cpp" />
     <ClCompile Include="MapWidget.cpp" />
     <ClCompile Include="QtWidgetsApplication1.cpp" />
@@ -65,7 +71,15 @@
     <QtMoc Include="MapWidget.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Config.h" />
+    <ClInclude Include="ConfigLoader.h" />
     <ClInclude Include="MapData.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="config.json">
+      <SubType>
+      </SubType>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
