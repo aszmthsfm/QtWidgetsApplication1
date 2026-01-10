@@ -104,7 +104,6 @@ bool MapData::load(const QString& filePath) {
 void MapData::spawnVehicle() {
 }
 
-// 【关键修改】读取下一帧 JSON 数据并更新 m_vehicles
 void MapData::updateSimulationStep() {
     // 1. 基本校验
     if (m_jsonFiles.isEmpty()) return;
@@ -128,6 +127,13 @@ void MapData::updateSimulationStep() {
         return;
     }
 
+    // =========== 【修改步骤 1】保存上一帧的车辆列表 ===========
+    QMap<QString, Vehicle> prevVehiclesMap;
+    for (const auto& v : m_vehicles) {
+        prevVehiclesMap.insert(v.id, v);
+    }
+    // ======================================================
+
     // 清空当前车辆列表
     m_vehicles.clear();
 
@@ -145,32 +151,69 @@ void MapData::updateSimulationStep() {
         v.width = (float)obj["width"].toDouble(1.8);
         v.speed = (float)obj["velocity"].toDouble();
 
-        // =========================================================
-        // 【修改部分】基于 ID 的哈希颜色生成算法
-        // =========================================================
-
-        // 1. 计算 ID 的哈希值 (Qt 自带的 qHash 能够将字符串转为整数)
+        // 颜色生成逻辑
         uint hash = qHash(v.id);
-
-        // 2. 将哈希值映射到 HSV 颜色空间的色相 (Hue) 上 (0 ~ 359)
-        // 这样不同的 ID 会落在色轮的不同位置，产生不同的颜色
         int hue = hash % 360;
-
-        // 3. 设置饱和度 (Saturation) 和 亮度 (Value)
-        // Saturation: 200 (范围0-255)，保证颜色鲜艳
-        // Value: 240 (范围0-255)，保证颜色明亮
         v.color = QColor::fromHsv(hue, 200, 240);
-
-        // (可选) 如果你想让某些特定 ID (如救护车) 显示特定颜色，可以在这里加特殊判断
-        // if (v.id.contains("ambulance")) v.color = Qt::red;
-
-        // =========================================================
 
         v.currentEdgeId = obj["road_id"].toString();
         v.currentLaneIndex = obj["lane_index"].toInt(0);
 
         m_vehicles.append(v);
     }
+
+    // =========== 【修改步骤 2】智能排查逻辑 ===========
+
+    // 1. 找出这一帧里消失的车辆
+    for (auto it = prevVehiclesMap.begin(); it != prevVehiclesMap.end(); ++it) {
+        QString oldId = it.key();
+        Vehicle oldVeh = it.value();
+
+        // 检查这个 ID 是否还在新的一帧里
+        bool stillExists = false;
+        for (const auto& newVeh : m_vehicles) {
+            if (newVeh.id == oldId) {
+                stillExists = true;
+                break;
+            }
+        }
+
+        if (!stillExists) {
+            // 这辆车消失了！判断是正常离开还是异常消失
+            // 判断逻辑：如果离地图边缘小于 10 米，算正常离开
+            float distLeft = abs(oldVeh.x - m_bounds.left());
+            float distRight = abs(oldVeh.x - m_bounds.right());
+            float distTop = abs(oldVeh.y - m_bounds.top());
+            float distBottom = abs(oldVeh.y - m_bounds.bottom());
+
+            float minEdgeDist = std::min({ distLeft, distRight, distTop, distBottom });
+
+            if (minEdgeDist < 10.0f) {
+                // 离边缘很近，认为是正常离开，不打印 Log 以免刷屏
+                // qDebug() << "Vehicle" << oldId << "left map normally."; 
+            }
+            else {
+                // 离边缘很远就没了？这就是 BUG！
+                qDebug() << "!!! ABNORMAL DISAPPEARANCE:" << oldId
+                    << "at (" << oldVeh.x << "," << oldVeh.y << ")"
+                    << "Dist to edge:" << minEdgeDist
+                    << "Frame:" << m_currentFrameIndex;
+            }
+        }
+    }
+
+    // 2. (可选) 找出这一帧里凭空出现的车辆
+    /*
+    for (const auto& newVeh : m_vehicles) {
+        if (!prevVehiclesMap.contains(newVeh.id)) {
+            // 这是一辆新车
+            float distLeft = abs(newVeh.x - m_bounds.left());
+            // ... 同上计算 minEdgeDist ...
+            // if (minEdgeDist > 10.0f) qDebug() << "!!! ABNORMAL APPEARANCE:" << newVeh.id;
+        }
+    }
+    */
+    // ======================================================
 
     m_currentFrameIndex++;
     m_stepCounter++;

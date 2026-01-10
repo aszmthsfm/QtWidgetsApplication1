@@ -101,7 +101,7 @@ void QtWidgetsApplication1::initUI() {
     m_spinFPS = new QSpinBox();
     m_spinFPS->setRange(1, 60);
     m_spinFPS->setValue(m_config.sim.targetFPS);
-    m_spinFPS->setFixedWidth(50);
+    m_spinFPS->setFixedWidth(100);
 
     QPushButton* startBtn = new QPushButton("Start");
     QPushButton* stopBtn = new QPushButton("Stop");

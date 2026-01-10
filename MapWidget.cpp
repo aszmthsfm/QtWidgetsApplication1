@@ -102,14 +102,20 @@ void MapWidget::paintGL() {
         glTranslatef(veh.x, veh.y, 0.0f);
         glRotatef(-veh.angle, 0.0f, 0.0f, 1.0f);
         glColor3f(veh.color.redF(), veh.color.greenF(), veh.color.blueF());
-        float halfLen = veh.length / 2.0f;
+        float len = veh.length ;
         float halfWid = veh.width / 2.0f;
-        glRectf(-halfWid, -halfLen, halfWid, halfLen);
+        // 1. 绘制实心车身
+        // Y轴范围：从 -len (车尾) 到 0 (车头)
+        glRectf(-halfWid, -len, halfWid, 0.0f);
+
+        // 2. 绘制黑色轮廓
         glColor3f(0, 0, 0);
         glLineWidth(1.0f);
         glBegin(GL_LINE_LOOP);
-        glVertex2f(-halfWid, -halfLen); glVertex2f(halfWid, -halfLen);
-        glVertex2f(halfWid, halfLen); glVertex2f(-halfWid, halfLen);
+        glVertex2f(-halfWid, -len); // 左后
+        glVertex2f(halfWid, -len);  // 右后
+        glVertex2f(halfWid, 0.0f);  // 右前
+        glVertex2f(-halfWid, 0.0f); // 左前
         glEnd();
         glPopMatrix();
     }
