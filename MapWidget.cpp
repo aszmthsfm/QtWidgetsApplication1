@@ -69,7 +69,10 @@ void MapWidget::resizeGL(int w, int h) {
     glViewport(0, 0, w, h);
 }
 
+// MapWidget.cpp
+
 void MapWidget::paintGL() {
+    // 1. 设置背景色 (保持原有逻辑)
     QColor bg = m_config.map.backgroundColor;
     if (m_style == STYLE_REALISTIC) {
         glClearColor(0.13f, 0.35f, 0.13f, 1.0f);
@@ -81,57 +84,110 @@ void MapWidget::paintGL() {
 
     if (!m_data) return;
 
+    // =========================================================
+    // 【核心修改】投影矩阵设置
+    // =========================================================
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    if (m_scale <= 0.001f) m_scale = 0.001f;
-    float viewHalfW = (width() / m_scale) / 2.0f;
-    float viewHalfH = (height() / m_scale) / 2.0f;
-    glOrtho(-viewHalfW, viewHalfW, -viewHalfH, viewHalfH, -2000.0, 2000.0);
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    // =========================================================
-    // 【新增】3D 倾斜逻辑
-    // 如果是 3D 模式，先绕 X 轴倒下 55 度，产生透视感
-    // =========================================================
     if (m_is3D) {
-        // 参数：角度, x轴, y轴, z轴
-        glRotatef(-55.0f, 1.0f, 0.0f, 0.0f);
-
-        // 可选：稍微向下平移一点，保证旋转中心在视野内舒服的位置
-        glTranslatef(0.0f, 0.0f, -200.0f);
+        // --- 3D 模式：使用透视投影 (Perspective) ---
+        // 近大远小，有消失点
+        setPerspectiveProjection(width(), height());
+    }
+    else {
+        // --- 2D 模式：使用正交投影 (Orthographic) ---
+        // 保持原有逻辑
+        if (m_scale <= 0.001f) m_scale = 0.001f;
+        float viewHalfW = (width() / m_scale) / 2.0f;
+        float viewHalfH = (height() / m_scale) / 2.0f;
+        glOrtho(-viewHalfW, viewHalfW, -viewHalfH, viewHalfH, -2000.0, 2000.0);
     }
 
-  
-    glRotatef(m_rotation, 0.0f, 0.0f, 1.0f);
-    glTranslatef(-m_centerX, -m_centerY, 0.0f);
+    // =========================================================
+    // 【核心修改】模型视图矩阵 (摄像机位置)
+    // =========================================================
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
 
+    if (m_is3D) {
+        // 3D 摄像机变换顺序：
+        // 1. 移远 (Z轴拉开距离)
+        glTranslatef(0.0f, 0.0f, -m_cameraZ);
+
+        // 2. 俯仰 (绕X轴转，抬头低头)
+        glRotatef(-m_pitch, 1.0f, 0.0f, 0.0f);
+
+        // 3. 旋转 (绕Z轴转，东南西北)
+        glRotatef(m_rotation, 0.0f, 0.0f, 1.0f);
+
+        // 4. 移动到地图中心
+        glTranslatef(-m_centerX, -m_centerY, 0.0f);
+    }
+    else {
+        // 2D 摄像机变换 (保持原有)
+        glRotatef(m_rotation, 0.0f, 0.0f, 1.0f);
+        glTranslatef(-m_centerX, -m_centerY, 0.0f);
+    }
+
+    // =========================================================
+    // 绘制内容 (保持不变)
+    // =========================================================
     if (m_style == STYLE_REALISTIC) drawRealisticRoads();
     else drawFlatRoads();
 
-    // 绘制车辆
+    // 绘制车辆 (保持不变)
     for (const auto& veh : m_data->vehicles()) {
         glPushMatrix();
         glTranslatef(veh.x, veh.y, 0.0f);
         glRotatef(-veh.angle, 0.0f, 0.0f, 1.0f);
         glColor3f(veh.color.redF(), veh.color.greenF(), veh.color.blueF());
-        float len = veh.length ;
+        float len = veh.length;
         float halfWid = veh.width / 2.0f;
-        // 1. 绘制实心车身
-        // Y轴范围：从 -len (车尾) 到 0 (车头)
+
+        // 画个简单的立体盒子车
+        if (m_is3D) {
+            // 车顶
+            glBegin(GL_QUADS);
+            glVertex3f(-halfWid, -len, 1.5f);
+            glVertex3f(halfWid, -len, 1.5f);
+            glVertex3f(halfWid, 0.0f, 1.5f);
+            glVertex3f(-halfWid, 0.0f, 1.5f);
+            glEnd();
+            // (为了简化代码，侧面暂时省略，或者你可以自己加 GL_QUADS 画侧面)
+        }
+
+        // 原始的 2D 车身
         glRectf(-halfWid, -len, halfWid, 0.0f);
 
-        // 2. 绘制黑色轮廓
+        // 黑色轮廓
         glColor3f(0, 0, 0);
         glLineWidth(1.0f);
         glBegin(GL_LINE_LOOP);
-        glVertex2f(-halfWid, -len); // 左后
-        glVertex2f(halfWid, -len);  // 右后
-        glVertex2f(halfWid, 0.0f);  // 右前
-        glVertex2f(-halfWid, 0.0f); // 左前
+        glVertex2f(-halfWid, -len);
+        glVertex2f(halfWid, -len);
+        glVertex2f(halfWid, 0.0f);
+        glVertex2f(-halfWid, 0.0f);
         glEnd();
         glPopMatrix();
     }
+}
+
+// 【新增】透视投影辅助函数
+void MapWidget::setPerspectiveProjection(int w, int h) {
+    if (h == 0) h = 1;
+    float aspectRatio = (float)w / (float)h;
+    float fov = 45.0f; // 视野角度
+    float zNear = 1.0f;
+    float zFar = 10000.0f; //以此保证能看得很远
+
+    // 手动计算 glFrustum 参数
+    float top = zNear * std::tan(fov * 0.5f * 3.1415926f / 180.0f);
+    float bottom = -top;
+    float right = top * aspectRatio;
+    float left = -right;
+
+    glFrustum(left, right, bottom, top, zNear, zFar);
 }
 
 void MapWidget::drawWideLane(const QVector<QPointF>& shape, float width, QColor color) {
@@ -364,18 +420,72 @@ void MapWidget::drawFlatRoads() {
 }
 
 void MapWidget::mousePressEvent(QMouseEvent* event) { if (event->button() == Qt::LeftButton) m_lastMousePos = event->pos(); }
+
+// MapWidget.cpp -> mouseMoveEvent
+
 void MapWidget::mouseMoveEvent(QMouseEvent* event) {
+    QPoint delta = event->pos() - m_lastMousePos;
+    m_lastMousePos = event->pos();
+
+    // --- 左键：平移 (Pan) ---
     if (event->buttons() & Qt::LeftButton) {
-        QPoint delta = event->pos() - m_lastMousePos;
-        m_lastMousePos = event->pos();
         float rad = m_rotation * 3.1415926f / 180.0f;
-        float dx = delta.x() * cos(-rad) - delta.y() * sin(-rad);
-        float dy = delta.x() * sin(-rad) + delta.y() * cos(-rad);
-        m_centerX -= dx / m_scale; m_centerY += dy / m_scale;
+        float cosA = cos(-rad);
+        float sinA = sin(-rad);
+        float dx = delta.x();
+        float dy = delta.y();
+
+        // 3D 模式下，平移速度需要根据高度动态调整，否则拉远了拖不动
+        float panScale = m_is3D ? (m_cameraZ / 600.0f) : (1.0f / m_scale);
+
+        // 考虑旋转对平移方向的影响
+        float moveX = dx * cosA - dy * sinA;
+        float moveY = dx * sinA + dy * cosA;
+
+        m_centerX -= moveX * panScale;
+        m_centerY += moveY * panScale;
+        update();
+    }
+
+    // --- 右键：旋转 (Rotate) ---
+    if (event->buttons() & Qt::RightButton) {
+        if (m_is3D) {
+            // 左右拖拽 -> 改变方向 (Z轴旋转)
+            m_rotation += delta.x() * 0.5f;
+
+            // 上下拖拽 -> 改变俯仰角 (X轴旋转)
+            m_pitch += delta.y() * 0.5f;
+
+            // 限制俯仰角，防止翻转 (0度是平视，90度是垂直俯视)
+            if (m_pitch < 10.0f) m_pitch = 10.0f;
+            if (m_pitch > 89.0f) m_pitch = 89.0f;
+        }
+        else {
+            // 2D 模式下右键只允许平面旋转
+            m_rotation += delta.x() * 0.5f;
+        }
         update();
     }
 }
+
+// MapWidget.cpp -> wheelEvent
+
 void MapWidget::wheelEvent(QWheelEvent* event) {
-    if (event->angleDelta().y() > 0) m_scale *= 1.1f; else m_scale /= 1.1f;
+    int delta = event->angleDelta().y();
+
+    if (m_is3D) {
+        // --- 3D 模式：滚轮改变摄像机高度 (Zoom) ---
+        if (delta > 0) m_cameraZ *= 0.9f; // 拉近
+        else m_cameraZ *= 1.1f;           // 拉远
+
+        // 限制高度范围
+        if (m_cameraZ < 10.0f) m_cameraZ = 10.0f;
+        if (m_cameraZ > 5000.0f) m_cameraZ = 5000.0f;
+    }
+    else {
+        // --- 2D 模式：滚轮改变 Scale ---
+        if (delta > 0) m_scale *= 1.1f;
+        else m_scale /= 1.1f;
+    }
     update();
 }

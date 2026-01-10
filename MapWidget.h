@@ -7,6 +7,7 @@
 #include <QVector2D>
 #include "MapData.h"
 #include "Config.h"
+#include <QtMath>
 
 class MapWidget : public QOpenGLWidget, protected QOpenGLFunctions
 {
@@ -28,7 +29,17 @@ public:
     void fitMap();
     void setRotation(float angle);
     void setFocus(float x, float y, float zoomVal);
-    void set3D(bool enable) { m_is3D = enable; update(); }
+    void set3D(bool enable) {
+        m_is3D = enable;
+        if (m_is3D) {
+            m_pitch = 45.0f;    // 默认俯视 45 度
+            m_cameraZ = 200.0f; // 默认高度
+        }
+        else {
+            m_rotation = 0.0f;  // 切回 2D 时归正
+        }
+        update();
+    }
 
 protected:
     void initializeGL() override;
@@ -67,4 +78,7 @@ private:
     QPoint m_lastMousePos;
     float m_rotation = 0.0f;
     bool m_is3D = false;
+    void setPerspectiveProjection(int w, int h);
+    float m_pitch = 0.0f;    // 俯仰角 (X轴旋转)
+    float m_cameraZ = 200.0f;// 摄像机高度 (Z轴距离)
 };
