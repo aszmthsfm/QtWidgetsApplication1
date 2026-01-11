@@ -1,14 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>qml;cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
-    </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>qrc;rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
@@ -21,6 +13,18 @@
       <UniqueIdentifier>{639EADAA-A684-42e4-A9AD-28FC9BCB8F7C}</UniqueIdentifier>
       <Extensions>ts</Extensions>
     </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{86c789cf-186f-4449-b8e5-ce50d02d35d2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Model">
+      <UniqueIdentifier>{2b6e2624-3f90-4843-8c7f-1a0970cb0db2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="View">
+      <UniqueIdentifier>{e33a8a2c-b161-465c-afb6-9fa5d0964b6f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{1e73e158-9c6d-4c11-880f-e13dc54b3d07}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <QtRcc Include="QtWidgetsApplication1.qrc">
@@ -29,46 +33,85 @@
     <QtUic Include="QtWidgetsApplication1.ui">
       <Filter>Form Files</Filter>
     </QtUic>
-    <ClCompile Include="QtWidgetsApplication1.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="ConfigLoader.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="MapWidget.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="main.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
     <ClCompile Include="MapData.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Model</Filter>
     </ClCompile>
-    <ClCompile Include="ConfigLoader.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="SimulationLoader.cpp">
+      <Filter>Model</Filter>
+    </ClCompile>
+    <ClCompile Include="RoadNetworkLoader.cpp">
+      <Filter>Model</Filter>
+    </ClCompile>
+    <ClCompile Include="MapWidget.cpp">
+      <Filter>View</Filter>
+    </ClCompile>
+    <ClCompile Include="MapRenderer.cpp">
+      <Filter>View</Filter>
+    </ClCompile>
+    <ClCompile Include="MapCamera.cpp">
+      <Filter>View</Filter>
+    </ClCompile>
+    <ClCompile Include="QtWidgetsApplication1.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ControlPanel.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="InfoPanel.cpp">
+      <Filter>UI</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Config.h">
-      <Filter>Header Files</Filter>
+      <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="ConfigLoader.h">
-      <Filter>Header Files</Filter>
+      <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="MapData.h">
-      <Filter>Header Files</Filter>
+      <Filter>Model</Filter>
+    </ClInclude>
+    <ClInclude Include="SimulationLoader.h">
+      <Filter>Model</Filter>
+    </ClInclude>
+    <ClInclude Include="RoadNetWorkLoader.h">
+      <Filter>Model</Filter>
+    </ClInclude>
+    <ClInclude Include="MapRenderer.h">
+      <Filter>View</Filter>
+    </ClInclude>
+    <ClInclude Include="MapCamera.h">
+      <Filter>View</Filter>
+    </ClInclude>
+    <ClInclude Include="Types.h">
+      <Filter>Model</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="MapWidget.h">
-      <Filter>Header Files</Filter>
+      <Filter>View</Filter>
     </QtMoc>
     <QtMoc Include="QtWidgetsApplication1.h">
-      <Filter>Header Files</Filter>
+      <Filter>UI</Filter>
+    </QtMoc>
+    <QtMoc Include="ControlPanel.h">
+      <Filter>UI</Filter>
+    </QtMoc>
+    <QtMoc Include="InfoPanel.h">
+      <Filter>UI</Filter>
     </QtMoc>
   </ItemGroup>
   <ItemGroup>
     <None Include="config.json">
-      <Filter>Source Files</Filter>
+      <Filter>Core</Filter>
     </None>
   </ItemGroup>
 </Project>

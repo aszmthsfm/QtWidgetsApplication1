@@ -58,6 +58,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ControlPanel.cpp" />
+    <ClCompile Include="InfoPanel.cpp" />
+    <ClCompile Include="MapCamera.cpp" />
+    <ClCompile Include="MapRenderer.cpp" />
+    <ClCompile Include="RoadNetworkLoader.cpp" />
+    <ClCompile Include="SimulationLoader.cpp" />
     <QtRcc Include="QtWidgetsApplication1.qrc" />
     <QtUic Include="QtWidgetsApplication1.ui" />
     <QtMoc Include="QtWidgetsApplication1.h" />
@@ -73,7 +79,14 @@
   <ItemGroup>
     <ClInclude Include="Config.h" />
     <ClInclude Include="ConfigLoader.h" />
+    <ClInclude Include="Types.h" />
+    <QtMoc Include="ControlPanel.h" />
+    <QtMoc Include="InfoPanel.h" />
+    <ClInclude Include="MapCamera.h" />
     <ClInclude Include="MapData.h" />
+    <ClInclude Include="MapRenderer.h" />
+    <ClInclude Include="RoadNetWorkLoader.h" />
+    <ClInclude Include="SimulationLoader.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="config.json">

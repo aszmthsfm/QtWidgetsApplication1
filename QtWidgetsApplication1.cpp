@@ -1,23 +1,22 @@
 #include "QtWidgetsApplication1.h"
 #include "ConfigLoader.h"
+#include "RoadNetworkLoader.h" 
+#include "ControlPanel.h"
+#include "InfoPanel.h"
+
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGroupBox>
 #include <QLabel>
 #include <QPushButton>
-#include <QSpinBox>
-#include <QCheckBox>
-#include <QTextEdit>
 #include <QTimer>
 #include <QDebug>
-#include <QTime>
 
 QtWidgetsApplication1::QtWidgetsApplication1(QWidget* parent)
     : QMainWindow(parent)
 {
-    // ui.setupUi(this); // 如果不使用 .ui 文件设计界面，这行可以注释掉，或者保留也不影响
+    // ui.setupUi(this); 
 
-    // 按顺序初始化
     initConfig();
     initData();
     initUI();
@@ -29,10 +28,7 @@ QtWidgetsApplication1::~QtWidgetsApplication1()
 }
 
 void QtWidgetsApplication1::initConfig() {
-    // 确保 config.json 在运行目录下
     m_config = ConfigLoader::load("config.json");
-
-    // 设置窗口基本属性
     resize(m_config.window.width, m_config.window.height);
     setWindowTitle(m_config.window.title);
 }
@@ -41,11 +37,12 @@ void QtWidgetsApplication1::initData() {
     m_sharedData = std::make_shared<MapData>();
     m_sharedData->setConfig(m_config);
 
-    // 加载地图
-    bool loaded = m_sharedData->load(m_config.map.netFilePath);
+    // 【核心修改】使用 RoadNetworkLoader 加载数据
+    // 不再调用 m_sharedData->load()
+    bool loaded = RoadNetworkLoader::load(m_config.map.netFilePath, m_sharedData);
 
-    // 初始化回放路径
-    m_sharedData->initPlayback("D:/2025data/oop/Json");
+    // 回放数据初始化保持不变 (仍然在 MapData 中)
+    m_sharedData->initPlayback("D:/2025data/oop/Json"); // 请确保路径正确
 
     QRectF bounds = m_sharedData->bounds();
     if (loaded) {
@@ -63,133 +60,82 @@ void QtWidgetsApplication1::initUI() {
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
 
     // ==========================================
-    // 左侧：主地图 (Main View)
+    // 左侧：主地图 (View)
     // ==========================================
     m_leftMap = new MapWidget(this);
-    m_leftMap->setStyle(MapWidget::STYLE_REALISTIC); // 真实风格
+    m_leftMap->setStyle(MapWidget::STYLE_REALISTIC);
     m_leftMap->setConfig(m_config);
     m_leftMap->setData(m_sharedData);
 
-
-    // ---------------------------------------------------------
-     // 【修改】在左侧地图上添加悬浮按钮 (默认显示 2D)
-     // ---------------------------------------------------------
-     // 1. 创建按钮，父对象设为 m_leftMap
-     // 【改动点】这里文字直接设为 "2D View"，明确当前默认是 2D
+    // 悬浮在地图上的 2D/3D 切换按钮
     m_btnToggleView = new QPushButton("2D View", m_leftMap);
-
-    // 2. 设置位置 (左上角)
     m_btnToggleView->setGeometry(20, 20, 80, 30);
-
-    // 3. 设置为“开关”模式
     m_btnToggleView->setCheckable(true);
-
-    // 【改动点】确保初始状态是“未按下”，配合文字 "2D View" 表示默认状态
     m_btnToggleView->setChecked(false);
-
-    // 4. 设置样式
-    // 这里的样式逻辑是：
-    // 未按下(默认 2D) -> 白底黑字
-    // 按下(切换到 3D) -> 蓝底白字
     m_btnToggleView->setStyleSheet(
-        "QPushButton {"
-        "   background-color: rgba(255, 255, 255, 220);"
-        "   border: 1px solid #8f8f91;"
-        "   border-radius: 4px;"
-        "   font-weight: bold;"
-        "   color: black;"
-        "}"
-        "QPushButton:checked {"
-        "   background-color: #4a90e2;"
-        "   color: white;"
-        "}"
-        "QPushButton:hover {"
-        "   background-color: white;"
-        "}"
+        "QPushButton { background-color: rgba(255, 255, 255, 220); border: 1px solid #8f8f91; border-radius: 4px; font-weight: bold; color: black; }"
+        "QPushButton:checked { background-color: #4a90e2; color: white; }"
+        "QPushButton:hover { background-color: white; }"
     );
-
     m_btnToggleView->show();
 
-    // 【新增】连接逻辑：点击按钮切换 2D/3D 文字和地图状态
-    // =========================================================
     connect(m_btnToggleView, &QPushButton::toggled, [=](bool checked) {
         if (checked) {
-            // 按钮被按下 -> 进入 3D 模式
             m_btnToggleView->setText("3D View");
             m_leftMap->set3D(true);
         }
         else {
-            // 按钮弹起 -> 回到 2D 模式
             m_btnToggleView->setText("2D View");
             m_leftMap->set3D(false);
         }
         });
 
-    // ---------------------------------------------------------
-
-    // 自动缩放
     float mainMapScale = (float)height() / std::max(1.0f, m_mapHeight) * 0.95f;
     m_leftMap->setFocus(m_centerPos.x(), m_centerPos.y(), mainMapScale);
 
     mainLayout->addWidget(m_leftMap, 1);
 
     // ==========================================
-    // 右侧：仪表盘
+    // 右侧布局
     // ==========================================
     QWidget* rightPanel = new QWidget(this);
     QVBoxLayout* rightLayout = new QVBoxLayout(rightPanel);
 
-    // --- 右上：全局视图 ---
+    // 1. 全局鹰眼图
     m_globalSceneMap = new MapWidget(this);
     m_globalSceneMap->setStyle(MapWidget::STYLE_FLAT);
     m_globalSceneMap->setConfig(m_config);
     m_globalSceneMap->setData(m_sharedData);
     m_globalSceneMap->setRotation(-90.0f);
-
     float globalScale = 600.0f / std::max(1.0f, m_mapHeight) * 0.9f;
     m_globalSceneMap->setFocus(m_centerPos.x(), m_centerPos.y(), globalScale);
 
     rightLayout->addWidget(createGroupedWidget("Global Image Scene (Rotated -90)", m_globalSceneMap), 2);
 
-    // --- 中间：控制栏 ---
-    QGroupBox* controlBox = new QGroupBox("Control Panel");
-    controlBox->setFixedHeight(80);
-    QHBoxLayout* ctrlLayout = new QHBoxLayout(controlBox);
+    // 2. 控制面板 (使用新模块)
+    m_ctrlPanel = new ControlPanel(m_config.sim.targetFPS, this);
 
-    m_spinFPS = new QSpinBox();
-    m_spinFPS->setRange(1, 60);
-    m_spinFPS->setValue(m_config.sim.targetFPS);
-    m_spinFPS->setFixedWidth(100);
+    connect(m_ctrlPanel, &ControlPanel::startRequested, this, &QtWidgetsApplication1::onStartClicked);
+    connect(m_ctrlPanel, &ControlPanel::stopRequested, this, &QtWidgetsApplication1::onStopClicked);
+    connect(m_ctrlPanel, &ControlPanel::restartRequested, this, &QtWidgetsApplication1::onRestartClicked);
+    connect(m_ctrlPanel, &ControlPanel::fpsChanged, [this](int fps) {
+        if (m_simTimer && fps > 0) m_simTimer->setInterval(1000 / fps);
+        });
 
-    QPushButton* startBtn = new QPushButton("Start");
-    QPushButton* stopBtn = new QPushButton("Stop");
-    QPushButton* restartBtn = new QPushButton("Restart");
+    rightLayout->addWidget(m_ctrlPanel, 0);
 
-    // 连接控制按钮
-    connect(startBtn, &QPushButton::clicked, this, &QtWidgetsApplication1::onStartClicked);
-    connect(stopBtn, &QPushButton::clicked, this, &QtWidgetsApplication1::onStopClicked);
-    connect(restartBtn, &QPushButton::clicked, this, &QtWidgetsApplication1::onRestartClicked);
-
-    ctrlLayout->addWidget(new QLabel("Render Scene @"));
-    ctrlLayout->addWidget(m_spinFPS);
-    ctrlLayout->addWidget(new QLabel("FPS"));
-    ctrlLayout->addSpacing(20);
-    ctrlLayout->addWidget(startBtn);
-    ctrlLayout->addWidget(stopBtn);
-    ctrlLayout->addWidget(restartBtn);
-    ctrlLayout->addStretch(); // 简化了一些不用的按钮布局
-
-    rightLayout->addWidget(controlBox, 0);
-
-    // --- 右下：局部视图 ---
+    // 3. 数据与局部视图区域
     QWidget* dataZone = new QWidget();
     QHBoxLayout* dataLayout = new QHBoxLayout(dataZone);
 
-    m_txtGlobalScene = new QTextEdit();
-    m_txtGlobalScene->setText("System Ready... Click a vehicle to see details.");
-    m_txtGlobalScene->setReadOnly(true); //设置只读
-    dataLayout->addWidget(createGroupedWidget("Global Text Scene", m_txtGlobalScene), 1);
+    // 3.1 信息面板 (使用新模块)
+    m_infoPanel = new InfoPanel(this);
+    // 连接：地图选中车辆 -> 信息面板更新
+    connect(m_leftMap, &MapWidget::vehicleSelected, m_infoPanel, &InfoPanel::updateInfo);
 
+    dataLayout->addWidget(m_infoPanel, 1);
+
+    // 3.2 局部视图
     QWidget* localZone = new QWidget();
     QVBoxLayout* localLayout = new QVBoxLayout(localZone);
 
@@ -197,14 +143,12 @@ void QtWidgetsApplication1::initUI() {
     m_localMap->setStyle(MapWidget::STYLE_FLAT);
     m_localMap->setConfig(m_config);
     m_localMap->setData(m_sharedData);
-
-    // 默认显示 J2
     QPointF startPt = m_sharedData->getJunctionPosition("J2");
     m_localMap->setFocus(startPt.x(), startPt.y(), m_config.map.defaultLocalZoom);
 
     localLayout->addWidget(createGroupedWidget("Local Image Scene", m_localMap), 1);
 
-    // 路口选择按钮
+    // 路口选择按钮组
     QGroupBox* btnGroup = new QGroupBox("Select Junction Region");
     btnGroup->setFixedHeight(60);
     QHBoxLayout* btnLayout = new QHBoxLayout(btnGroup);
@@ -224,29 +168,18 @@ void QtWidgetsApplication1::initUI() {
     rightLayout->addWidget(dataZone, 3);
 
     mainLayout->addWidget(rightPanel, 1);
-
-
 }
 
 void QtWidgetsApplication1::initConnections() {
     m_simTimer = new QTimer(this);
-    int initialInterval = 1000 / m_spinFPS->value();
+    int initialInterval = 1000 / m_config.sim.targetFPS;
     m_simTimer->setInterval(initialInterval);
 
-    // 连接定时器到槽函数
     connect(m_simTimer, &QTimer::timeout, this, &QtWidgetsApplication1::onTimerTimeout);
-
-    // FPS 动态调整
-    connect(m_spinFPS, &QSpinBox::valueChanged, [=](int val) {
-        if (val > 0) m_simTimer->setInterval(1000 / val);
-        });
-    connect(m_leftMap, &MapWidget::vehicleSelected, this, &QtWidgetsApplication1::onVehicleSelected);
 }
 
-// 槽函数实现
 void QtWidgetsApplication1::onTimerTimeout() {
-    m_sharedData->updateSimulationStep();
-    // 刷新所有视图
+    if (m_sharedData) m_sharedData->updateSimulationStep();
     if (m_leftMap) m_leftMap->update();
     if (m_globalSceneMap) m_globalSceneMap->update();
     if (m_localMap) m_localMap->update();
@@ -260,13 +193,23 @@ void QtWidgetsApplication1::onStopClicked() {
     if (m_simTimer) m_simTimer->stop();
 }
 
+void QtWidgetsApplication1::onRestartClicked() {
+    if (m_sharedData) m_sharedData->reset();
+
+    if (m_leftMap) m_leftMap->update();
+    if (m_globalSceneMap) m_globalSceneMap->update();
+    if (m_localMap) m_localMap->update();
+
+    qDebug() << "Simulation reset.";
+}
+
 void QtWidgetsApplication1::onJumpToJunction(const QString& juncId) {
     if (!m_localMap) return;
     QPointF pt = m_sharedData->getJunctionPosition(juncId);
     if (pt.isNull() && pt.x() == 0 && pt.y() == 0) pt = m_centerPos;
 
     m_localMap->setFocus(pt.x(), pt.y(), m_config.map.defaultLocalZoom);
-    qDebug() << "Jump to" << juncId << "at" << pt;
+    qDebug() << "Jump to" << juncId;
 }
 
 QWidget* QtWidgetsApplication1::createGroupedWidget(const QString& title, QWidget* contentWidget) {
@@ -275,29 +218,4 @@ QWidget* QtWidgetsApplication1::createGroupedWidget(const QString& title, QWidge
     layout->setContentsMargins(2, 10, 2, 2);
     layout->addWidget(contentWidget);
     return groupBox;
-}
-
-void QtWidgetsApplication1::onRestartClicked() {
-    // 1. 调用底层数据重置
-    if (m_sharedData) {
-        m_sharedData->reset();
-    }
-
-    // 2. 强制刷新所有视图，使画面立即回到初始状态
-    if (m_leftMap) m_leftMap->update();
-    if (m_globalSceneMap) m_globalSceneMap->update();
-    if (m_localMap) m_localMap->update();
-
-    // 3. (可选) 如果你希望点击重置后自动暂停，可以取消下面这行的注释
-    // onStopClicked(); 
-
-    qDebug() << "Simulation reset to frame 0.";
-}
-
-void QtWidgetsApplication1::onVehicleSelected(const QString& info) {
-    if (m_txtGlobalScene) {
-        m_txtGlobalScene->setText(info);
-        // 可以加个时间戳
-        m_txtGlobalScene->append("\nQuery Time: " + QTime::currentTime().toString());
-    }
 }

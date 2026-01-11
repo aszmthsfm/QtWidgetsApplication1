@@ -7,13 +7,13 @@
 #include "MapWidget.h"
 #include "Config.h"
 
-
+// 前置声明，减少头文件依赖
 class QTimer;
 class QLabel;
-class QSpinBox;
 class QGroupBox;
 class QPushButton;
-class QTextEdit;
+class ControlPanel; 
+class InfoPanel;    
 
 class QtWidgetsApplication1 : public QMainWindow
 {
@@ -24,25 +24,22 @@ public:
     ~QtWidgetsApplication1();
 
 private slots:
-    // 定义槽函数，处理交互逻辑
+    // 槽函数：处理定时器和交互逻辑
     void onTimerTimeout();
     void onStartClicked();
     void onStopClicked();
     void onRestartClicked();
     void onJumpToJunction(const QString& juncId);
-    //处理车辆选中
-    void onVehicleSelected(const QString& info);
 
 private:
-    // 辅助函数：创建带标题的容器
+    // 辅助函数
     QWidget* createGroupedWidget(const QString& title, QWidget* contentWidget);
 
-    // 初始化各个模块
+    // 初始化流程
     void initConfig();
     void initData();
     void initUI();
     void initConnections();
-    QTextEdit* m_txtGlobalScene = nullptr;
 
 private:
     Ui::QtWidgetsApplication1Class ui;
@@ -52,16 +49,19 @@ private:
     std::shared_ptr<MapData> m_sharedData;
     QTimer* m_simTimer = nullptr;
 
-    // 界面组件指针 (需要交互的组件存为成员变量)
+    // --- 视图组件 ---
     MapWidget* m_leftMap = nullptr;       // 主地图
-    MapWidget* m_globalSceneMap = nullptr;// 右上全局视图
-    MapWidget* m_localMap = nullptr;      // 右下局部视图
+    MapWidget* m_globalSceneMap = nullptr;// 全局鹰眼图
+    MapWidget* m_localMap = nullptr;      // 局部路口图
 
-    QSpinBox* m_spinFPS = nullptr;
-    //2/3d切换
+    // --- UI 模块 (替换掉了原来的散乱控件) ---
+    ControlPanel* m_ctrlPanel = nullptr;  // 底部控制面板
+    InfoPanel* m_infoPanel = nullptr;     // 右侧信息面板
+
+    // 2D/3D 切换按钮 
     QPushButton* m_btnToggleView = nullptr;
 
-    // 布局相关参数
+    // 布局参数
     float m_mapHeight = 100.0f;
     QPointF m_centerPos;
 };
