@@ -1,7 +1,16 @@
 #pragma once
 #include <QPoint>
 #include <QPointF>
+#include <QVector3D>
+#include <QMatrix4x4>
 #include <QtMath>
+
+
+struct Ray {
+    QVector3D origin;    // 起点
+    QVector3D direction; // 方向 (归一化)
+};
+
 
 class MapCamera {
 public:
@@ -11,6 +20,7 @@ public:
     void setViewport(int w, int h); // 窗口大小改变时调用
     void setFocus(float x, float y, float zoomVal); // 聚焦到某点
     void set3D(bool enable);
+    void setRotation(float angle);
     bool is3D() const { return m_is3D; }
 
     // --- OpenGL 矩阵应用 ---
@@ -28,9 +38,14 @@ public:
     // 将屏幕像素坐标 (x,y) 转换为地图世界坐标 (x,y)
     QPointF screenToWorld(const QPoint& screenPos);
 
+    Ray getRay(const QPoint& screenPos);
+
 private:
     // 内部辅助：透视投影设置
     void setPerspectiveProjection();
+
+    QMatrix4x4 getProjectionMatrix();
+    QMatrix4x4 getViewMatrix();
 
 private:
     int m_viewportW = 100;

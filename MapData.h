@@ -34,6 +34,12 @@ public:
     void setVehicles(const QVector<Vehicle>& vehs) { m_vehicles = vehs; }
     QVector<Vehicle>& mutableVehicles() { return m_vehicles; }
 
+    //选中车辆
+    void setSelectedVehicleId(const QString& id) { m_selectedVehicleId = id; }
+    QString getSelectedVehicleId() const { return m_selectedVehicleId; }
+
+    const Vehicle* getVehicle(const QString& id) const;
+
     // --- 仿真控制 ---
     void initPlayback(const QString& directoryPath);
     void updateSimulationStep();
@@ -50,4 +56,6 @@ private:
     SimulationLoader m_simLoader;
     int m_currentFrameIndex = 0;
     int m_stepCounter = 0;
+
+    QString m_selectedVehicleId = "";
 };

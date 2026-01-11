@@ -33,6 +33,7 @@ public:
     void set3D(bool enable);
 
 signals:
+    void selectionChanged();
     void vehicleSelected(const QString& info);
 
 protected:
@@ -43,17 +44,18 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
     std::shared_ptr<MapData> m_data;
     AppConfig m_config;
     RenderStyle m_style = STYLE_FLAT;
 
-    // 【核心组件】
+
     MapCamera m_camera;      // 负责看 (数学/交互)
     MapRenderer m_renderer;  // 负责画 (OpenGL)
 
     QPoint m_lastMousePos;
+    QPoint m_pressPos;
 
-    // 所有的 drawXXX 函数和 m_roadTexture 变量都已经移除！
 };

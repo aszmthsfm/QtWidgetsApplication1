@@ -54,6 +54,42 @@ void QtWidgetsApplication1::initData() {
     }
 }
 
+void QtWidgetsApplication1::updateSelectedVehicleInfo() {
+    if (!m_sharedData || !m_infoPanel) return;
+
+    QString selId = m_sharedData->getSelectedVehicleId();
+    if (selId.isEmpty()) {
+        m_infoPanel->updateInfo("No vehicle selected.");
+        return;
+    }
+
+    const Vehicle* veh = m_sharedData->getVehicle(selId);
+    if (veh) {
+        // 动态生成最新信息
+        QString info = QString("Vehicle Selected:\n"
+            "-----------------\n"
+            "ID: %1\n"
+            "Pos: (%2, %3)\n"
+            "Speed: %4 m/s\n"
+            "Angle: %5 deg\n"
+            "Road ID: %6\n"
+            "Lane Idx: %7")
+            .arg(veh->id)
+            .arg(QString::number(veh->x, 'f', 2))
+            .arg(QString::number(veh->y, 'f', 2))
+            .arg(QString::number(veh->speed, 'f', 2))
+            .arg(QString::number(veh->angle, 'f', 1))
+            .arg(veh->currentEdgeId)
+            .arg(veh->currentLaneIndex);
+
+        m_infoPanel->updateInfo(info);
+    }
+    else {
+        // 如果车辆跑出了地图消失了
+        m_infoPanel->updateInfo("Vehicle " + selId + " left the map.");
+    }
+}
+
 void QtWidgetsApplication1::initUI() {
     QWidget* centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
@@ -131,7 +167,7 @@ void QtWidgetsApplication1::initUI() {
     // 3.1 信息面板 (使用新模块)
     m_infoPanel = new InfoPanel(this);
     // 连接：地图选中车辆 -> 信息面板更新
-    connect(m_leftMap, &MapWidget::vehicleSelected, m_infoPanel, &InfoPanel::updateInfo);
+    connect(m_leftMap, &MapWidget::selectionChanged, this, &QtWidgetsApplication1::updateSelectedVehicleInfo);
 
     dataLayout->addWidget(m_infoPanel, 1);
 
@@ -153,10 +189,10 @@ void QtWidgetsApplication1::initUI() {
     btnGroup->setFixedHeight(60);
     QHBoxLayout* btnLayout = new QHBoxLayout(btnGroup);
 
-    QPushButton* btnRegion1 = new QPushButton("1/4"); connect(btnRegion1, &QPushButton::clicked, [=]() { onJumpToJunction("J2"); });
-    QPushButton* btnRegion2 = new QPushButton("2/4"); connect(btnRegion2, &QPushButton::clicked, [=]() { onJumpToJunction("J11"); });
-    QPushButton* btnRegion3 = new QPushButton("3/4"); connect(btnRegion3, &QPushButton::clicked, [=]() { onJumpToJunction("J9"); });
-    QPushButton* btnRegion4 = new QPushButton("4/4"); connect(btnRegion4, &QPushButton::clicked, [=]() { onJumpToJunction("J1"); });
+    QPushButton* btnRegion1 = new QPushButton("1"); connect(btnRegion1, &QPushButton::clicked, [=]() { onJumpToJunction("J2"); });
+    QPushButton* btnRegion2 = new QPushButton("2"); connect(btnRegion2, &QPushButton::clicked, [=]() { onJumpToJunction("J11"); });
+    QPushButton* btnRegion3 = new QPushButton("3"); connect(btnRegion3, &QPushButton::clicked, [=]() { onJumpToJunction("J9"); });
+    QPushButton* btnRegion4 = new QPushButton("4"); connect(btnRegion4, &QPushButton::clicked, [=]() { onJumpToJunction("J1"); });
 
     btnLayout->addWidget(btnRegion1);
     btnLayout->addWidget(btnRegion2);
@@ -180,6 +216,7 @@ void QtWidgetsApplication1::initConnections() {
 
 void QtWidgetsApplication1::onTimerTimeout() {
     if (m_sharedData) m_sharedData->updateSimulationStep();
+    updateSelectedVehicleInfo();
     if (m_leftMap) m_leftMap->update();
     if (m_globalSceneMap) m_globalSceneMap->update();
     if (m_localMap) m_localMap->update();

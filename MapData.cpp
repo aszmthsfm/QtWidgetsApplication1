@@ -105,3 +105,11 @@ void MapData::updateSimulationStep() {
         m_currentFrameIndex = 0; // Ñ­»·²¥·Å
     }
 }
+
+const Vehicle* MapData::getVehicle(const QString& id) const {
+    if (id.isEmpty()) return nullptr;
+    for (const auto& v : m_vehicles) {
+        if (v.id == id) return &v;
+    }
+    return nullptr;
+}

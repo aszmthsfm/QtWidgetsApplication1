@@ -2,6 +2,8 @@
 #include <QMouseEvent>
 #include <algorithm>
 #include <cmath>
+#include <QVector3D>
+#include <QMatrix4x4>
 
 #pragma comment(lib, "opengl32.lib")
 
@@ -15,7 +17,71 @@ MapWidget::~MapWidget() {
     // 资源释放由 MapRenderer 的析构函数自动处理，这里不需要管了
 }
 
+float checkVehicleIntersection(const Ray& ray, const Vehicle& veh) {
+    // 1. 定义车辆尺寸
+    float len = veh.length;
+    float halfW = veh.width / 2.0f;
+    float h = 1.6f;
+
+    // 2. 将射线变换到车辆的局部坐标系
+    QMatrix4x4 toLocal;
+    toLocal.rotate(veh.angle, 0.0f, 0.0f, 1.0f);
+    toLocal.translate(-veh.x, -veh.y, -0.1f);
+    QVector3D rayOriginLocal = toLocal.map(ray.origin);       // 变换点：应用位移
+    QVector3D rayDirLocal = toLocal.mapVector(ray.direction); // 变换向量：不应用位移
+
+    // 3. 定义车辆的 AABB
+    QVector3D boxMin(-halfW, -len, 0.0f);
+    QVector3D boxMax(halfW, 0.0f, h);
+
+    // 4. 标准 Slab 方法检测
+    float tMin = 0.0f;
+    float tMax = 100000.0f;
+
+    // X轴检测
+    if (std::abs(rayDirLocal.x()) < 1e-6) {
+        if (rayOriginLocal.x() < boxMin.x() || rayOriginLocal.x() > boxMax.x()) return -1.0f;
+    }
+    else {
+        float t1 = (boxMin.x() - rayOriginLocal.x()) / rayDirLocal.x();
+        float t2 = (boxMax.x() - rayOriginLocal.x()) / rayDirLocal.x();
+        if (t1 > t2) std::swap(t1, t2);
+        tMin = std::max(tMin, t1);
+        tMax = std::min(tMax, t2);
+        if (tMin > tMax) return -1.0f;
+    }
+
+    // Y轴检测
+    if (std::abs(rayDirLocal.y()) < 1e-6) {
+        if (rayOriginLocal.y() < boxMin.y() || rayOriginLocal.y() > boxMax.y()) return -1.0f;
+    }
+    else {
+        float t1 = (boxMin.y() - rayOriginLocal.y()) / rayDirLocal.y();
+        float t2 = (boxMax.y() - rayOriginLocal.y()) / rayDirLocal.y();
+        if (t1 > t2) std::swap(t1, t2);
+        tMin = std::max(tMin, t1);
+        tMax = std::min(tMax, t2);
+        if (tMin > tMax) return -1.0f;
+    }
+
+    // Z轴检测
+    if (std::abs(rayDirLocal.z()) < 1e-6) {
+        if (rayOriginLocal.z() < boxMin.z() || rayOriginLocal.z() > boxMax.z()) return -1.0f;
+    }
+    else {
+        float t1 = (boxMin.z() - rayOriginLocal.z()) / rayDirLocal.z();
+        float t2 = (boxMax.z() - rayOriginLocal.z()) / rayDirLocal.z();
+        if (t1 > t2) std::swap(t1, t2);
+        tMin = std::max(tMin, t1);
+        tMax = std::min(tMax, t2);
+        if (tMin > tMax) return -1.0f;
+    }
+
+    return tMin;
+}
+
 void MapWidget::setRotation(float angle) {
+    m_camera.setRotation(angle);
     update();
 }
 
@@ -55,6 +121,8 @@ void MapWidget::initializeGL() {
     // 2. 只有 OpenGL 状态设置保留在这里，或者也可以移到 Renderer
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glEnable(GL_DEPTH_TEST);
 }
 
 void MapWidget::resizeGL(int w, int h) {
@@ -69,6 +137,8 @@ void MapWidget::paintGL() {
     else glClearColor(bg.redF(), bg.greenF(), bg.blueF(), 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+  
+
     if (!m_data) return;
 
     // 2. 应用摄像机
@@ -80,31 +150,13 @@ void MapWidget::paintGL() {
     m_renderer.render(m_data, m_config, m_camera.is3D(), (int)m_style);
 }
 
-// --- 交互部分 (保持不变，因为这属于 Controller 逻辑) ---
+// --- 交互部分---
 
 void MapWidget::mousePressEvent(QMouseEvent* event) {
-    if (event->button() == Qt::LeftButton) {
-        m_lastMousePos = event->pos();
-        if (m_data) {
-            QPointF worldPos = m_camera.screenToWorld(event->pos());
-
-            // ... (点击检测逻辑保持不变) ...
-            // 为节省篇幅，这里略去具体的查找循环，这部分逻辑建议未来移到 MapData::pickVehicle(pos)
-            float minDistance = 10000.0f;
-            bool found = false;
-            QString info;
-            for (const auto& veh : m_data->vehicles()) {
-                float dx = veh.x - worldPos.x();
-                float dy = veh.y - worldPos.y();
-                if (std::sqrt(dx * dx + dy * dy) < 8.0f) {
-                    found = true;
-                    info = "Selected: " + veh.id;
-                    break;
-                }
-            }
-            if (found) emit vehicleSelected(info);
-        }
-    }
+    // 1. 记录当前位置，供 mouseMoveEvent 计算 delta 使用 
+    m_lastMousePos = event->pos();
+    // 2. 记录按下的初始位置，用于 mouseReleaseEvent 判断是否是点击
+    m_pressPos = event->pos();
 }
 
 void MapWidget::mouseMoveEvent(QMouseEvent* event) {
@@ -121,7 +173,46 @@ void MapWidget::mouseMoveEvent(QMouseEvent* event) {
     }
 }
 
+void MapWidget::mouseReleaseEvent(QMouseEvent* event) {
+    QPoint dist = event->pos() - m_pressPos;
+    int moveDist = std::abs(dist.x()) + std::abs(dist.y());
+
+    if (moveDist < 5) {
+        if (event->button() == Qt::LeftButton && m_data) {
+            Ray pickRay = m_camera.getRay(event->pos());
+
+            float minDistance = 10000.0f;
+            bool found = false;
+            QString selectedId = "";
+
+            // 遍历车辆进行检测
+            for (const auto& veh : m_data->vehicles()) {
+                float hitDist = checkVehicleIntersection(pickRay, veh);
+                if (hitDist > 0 && hitDist < minDistance) {
+                    minDistance = hitDist;
+                    found = true;
+                    selectedId = veh.id;
+                }
+            }
+
+            // 更新状态并发送信号
+            if (found) {
+                m_data->setSelectedVehicleId(selectedId);
+            }
+            else {
+                m_data->setSelectedVehicleId("");
+            }
+
+            // 发送信号
+            emit selectionChanged();
+
+            update();
+        }
+    }
+}
+
 void MapWidget::wheelEvent(QWheelEvent* event) {
     m_camera.zoom(event->angleDelta().y());
     update();
 }
+

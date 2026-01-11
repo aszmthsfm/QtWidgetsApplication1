@@ -37,6 +37,10 @@ void MapCamera::set3D(bool enable) {
     }
 }
 
+void MapCamera::setRotation(float angle) {
+    m_rotation = angle;
+}
+
 void MapCamera::applyProjection() {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -65,6 +69,64 @@ void MapCamera::setPerspectiveProjection() {
     float left = -right;
 
     glFrustum(left, right, bottom, top, zNear, zFar);
+}
+
+QMatrix4x4 MapCamera::getProjectionMatrix() {
+    QMatrix4x4 proj;
+    proj.setToIdentity();
+    if (m_is3D) {
+        float aspectRatio = (float)m_viewportW / (m_viewportH ? m_viewportH : 1);
+        proj.perspective(45.0f, aspectRatio, 1.0f, 10000.0f);
+    }
+    else {
+        if (m_scale <= 0.001f) m_scale = 0.001f;
+        float w = (m_viewportW / m_scale) / 2.0f;
+        float h = (m_viewportH / m_scale) / 2.0f;
+        proj.ortho(-w, w, -h, h, -2000.0f, 2000.0f);
+    }
+    return proj;
+}
+
+QMatrix4x4 MapCamera::getViewMatrix() {
+    QMatrix4x4 view;
+    view.setToIdentity();
+    if (m_is3D) {
+        view.translate(0.0f, 0.0f, -m_cameraZ);
+        view.rotate(-m_pitch, 1.0f, 0.0f, 0.0f);
+        view.rotate(m_rotation, 0.0f, 0.0f, 1.0f);
+        view.translate(-m_centerX, -m_centerY, 0.0f);
+    }
+    else {
+        view.rotate(m_rotation, 0.0f, 0.0f, 1.0f);
+        view.translate(-m_centerX, -m_centerY, 0.0f);
+    }
+    return view;
+}
+
+Ray MapCamera::getRay(const QPoint& screenPos) {
+    QMatrix4x4 proj = getProjectionMatrix();
+    QMatrix4x4 view = getViewMatrix();
+    QMatrix4x4 invVP = (proj * view).inverted();
+
+    // 屏幕坐标转 NDC (Normalized Device Coordinates)
+    // 注意：Qt 的屏幕原点在左上角，OpenGL 在左下角，需要翻转 Y
+    float x = (2.0f * screenPos.x()) / m_viewportW - 1.0f;
+    float y = 1.0f - (2.0f * screenPos.y()) / m_viewportH;
+
+    // 1. 近平面点 (NDS Z = -1.0)
+    QVector4D nearPoint(x, y, -1.0f, 1.0f);
+    QVector4D nearWorld = invVP * nearPoint;
+    nearWorld /= nearWorld.w();
+
+    // 2. 远平面点 (NDS Z = 1.0)
+    QVector4D farPoint(x, y, 1.0f, 1.0f);
+    QVector4D farWorld = invVP * farPoint;
+    farWorld /= farWorld.w();
+
+    Ray ray;
+    ray.origin = nearWorld.toVector3D();
+    ray.direction = (farWorld - nearWorld).toVector3D().normalized();
+    return ray;
 }
 
 void MapCamera::applyModelView() {

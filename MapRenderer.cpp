@@ -2,8 +2,11 @@
 #include <QImage>
 #include <algorithm>
 #include <cmath>
-#include <GL/gl.h>
 #include <QVector2D>
+#include <QVector3D> // 用于更精确的计算
+
+// 确保包含 GL 头文件
+#include <GL/gl.h>
 
 MapRenderer::MapRenderer() {
 }
@@ -18,7 +21,7 @@ MapRenderer::~MapRenderer() {
 void MapRenderer::initialize() {
     initializeOpenGLFunctions();
 
-    // 加载纹理
+    // 加载纹理 (确保 asphalt.jpg 在构建目录或工作目录下)
     QImage img("asphalt.jpg");
     if (!img.isNull()) {
         m_roadTexture = new QOpenGLTexture(img.mirrored());
@@ -32,7 +35,6 @@ void MapRenderer::render(const std::shared_ptr<MapData>& data, const AppConfig& 
     if (!data) return;
 
     // 1. 绘制路网
-    // 注意：style 的定义在 MapWidget 中，这里简单用 int 传递，0=FLAT, 1=REALISTIC
     if (style == 1) {
         drawRealisticRoads(data, config);
     }
@@ -45,16 +47,18 @@ void MapRenderer::render(const std::shared_ptr<MapData>& data, const AppConfig& 
 }
 
 void MapRenderer::drawVehicles(const std::shared_ptr<MapData>& data, bool is3D) {
+    QString selectedId = data->getSelectedVehicleId();
     for (const auto& veh : data->vehicles()) {
         glPushMatrix();
-        glTranslatef(veh.x, veh.y, 0.0f);
+        glTranslatef(veh.x, veh.y, 0.1f);
         glRotatef(-veh.angle, 0.0f, 0.0f, 1.0f);
 
+        // 1. 正常绘制车辆
         if (is3D) {
             draw3DVehicle(veh.length, veh.width, veh.color);
         }
         else {
-            // 2D 平面画法
+            // 2D 绘制
             glColor3f(veh.color.redF(), veh.color.greenF(), veh.color.blueF());
             float len = veh.length;
             float halfWid = veh.width / 2.0f;
@@ -70,6 +74,56 @@ void MapRenderer::drawVehicles(const std::shared_ptr<MapData>& data, bool is3D) 
             glVertex2f(-halfWid, 0.0f);
             glEnd();
         }
+
+        // =========================================================
+        // 高亮选中逻辑
+        // =========================================================
+        if (!selectedId.isEmpty() && veh.id == selectedId) {
+            glDisable(GL_DEPTH_TEST); // 临时关闭深度测试，确保红框永远画在最上层，不被遮挡
+
+            glColor3f(1.0f, 0.0f, 0.0f); // 纯红色
+            glLineWidth(3.0f);           // 加粗线条
+
+            float len = veh.length;
+            float w = veh.width;
+            float margin = 0.4f; // 框比车稍微大一点点
+
+            // 绘制 3D 框 (线框盒) 或 2D 框
+            if (is3D) {
+                // 简单的 3D 包围盒
+                float h = 2.0f; // 高度
+                glBegin(GL_LINES);
+                // 底面四边
+                glVertex3f(-w / 2 - margin, -len - margin, 0); glVertex3f(w / 2 + margin, -len - margin, 0);
+                glVertex3f(w / 2 + margin, -len - margin, 0);  glVertex3f(w / 2 + margin, margin, 0);
+                glVertex3f(w / 2 + margin, margin, 0);         glVertex3f(-w / 2 - margin, margin, 0);
+                glVertex3f(-w / 2 - margin, margin, 0);        glVertex3f(-w / 2 - margin, -len - margin, 0);
+                // 顶面四边
+                glVertex3f(-w / 2 - margin, -len - margin, h); glVertex3f(w / 2 + margin, -len - margin, h);
+                glVertex3f(w / 2 + margin, -len - margin, h);  glVertex3f(w / 2 + margin, margin, h);
+                glVertex3f(w / 2 + margin, margin, h);         glVertex3f(-w / 2 - margin, margin, h);
+                glVertex3f(-w / 2 - margin, margin, h);        glVertex3f(-w / 2 - margin, -len - margin, h);
+                // 立柱
+                glVertex3f(-w / 2 - margin, -len - margin, 0); glVertex3f(-w / 2 - margin, -len - margin, h);
+                glVertex3f(w / 2 + margin, -len - margin, 0);  glVertex3f(w / 2 + margin, -len - margin, h);
+                glVertex3f(w / 2 + margin, margin, 0);         glVertex3f(w / 2 + margin, margin, h);
+                glVertex3f(-w / 2 - margin, margin, 0);        glVertex3f(-w / 2 - margin, margin, h);
+                glEnd();
+            }
+            else {
+                // 2D 红框
+                glBegin(GL_LINE_LOOP);
+                glVertex2f(-w / 2 - margin, -len - margin);
+                glVertex2f(w / 2 + margin, -len - margin);
+                glVertex2f(w / 2 + margin, 0.0f + margin);
+                glVertex2f(-w / 2 - margin, 0.0f + margin);
+                glEnd();
+            }
+
+            glLineWidth(1.0f); // 恢复线宽
+            glEnable(GL_DEPTH_TEST); // 恢复深度测试
+        }
+
         glPopMatrix();
     }
 }
@@ -139,9 +193,6 @@ void MapRenderer::drawRealisticRoads(const std::shared_ptr<MapData>& data, const
     glDisable(GL_TEXTURE_2D);
 
     // 3. 绘制标线
-    glEnable(GL_POLYGON_OFFSET_FILL);
-    glPolygonOffset(-1.0f, -1.0f);
-
     for (const auto& edge : data->edges()) {
         if (edge.function == "internal") continue;
         int laneCount = edge.lanes.size();
@@ -149,8 +200,9 @@ void MapRenderer::drawRealisticRoads(const std::shared_ptr<MapData>& data, const
             const Lane& lane = edge.lanes[i];
             float hW = lane.width / 2.0f;
 
+            // 绘制车道左侧的线（如果是多车道）
             if (i < laneCount - 1) {
-                if (i == 2) { // 黄色实线 (示例逻辑)
+                if (i == 2) { // 示例：黄色实线
                     glColor3f(1.0f, 1.0f, 0.0f); glDisable(GL_LINE_STIPPLE); glLineWidth(3.5f);
                     renderSingleLine(lane.shape, hW);
                 }
@@ -160,16 +212,23 @@ void MapRenderer::drawRealisticRoads(const std::shared_ptr<MapData>& data, const
                 }
             }
 
-            if (i == 0 || i == laneCount - 1) { // 边缘实线
-                glColor3f(0.85f, 0.85f, 0.85f); glDisable(GL_LINE_STIPPLE); glLineWidth(2.0f);
-                renderSingleLine(lane.shape, (i == 0 ? -hW : hW));
+            // 【修复问题1】必须分开判断，确保单车道时左右两条线都会画
+            glColor3f(0.85f, 0.85f, 0.85f); glDisable(GL_LINE_STIPPLE); glLineWidth(2.0f);
+
+            // 如果是第0条车道（最右侧），画右边线 (-hW)
+            if (i == 0) {
+                renderSingleLine(lane.shape, -hW);
+            }
+            // 如果是最后一条车道（最左侧），画左边线 (hW)
+            if (i == laneCount - 1) {
+                renderSingleLine(lane.shape, hW);
             }
 
+            // 绘制停止线
             drawStopLine(data, lane.shape, lane.width, true);
             drawStopLine(data, lane.shape, lane.width, false);
         }
     }
-    glDisable(GL_POLYGON_OFFSET_FILL);
     glLineWidth(1.0f);
 }
 
@@ -187,7 +246,7 @@ void MapRenderer::drawFlatRoads(const std::shared_ptr<MapData>& data, const AppC
     }
 }
 
-// --- 辅助绘图函数 (完全搬运自原 MapWidget) ---
+// --- 辅助绘图函数 ---
 
 void MapRenderer::drawWideLane(const QVector<QPointF>& shape, float width, QColor color) {
     if (shape.size() < 2) return;
@@ -197,7 +256,6 @@ void MapRenderer::drawWideLane(const QVector<QPointF>& shape, float width, QColo
     for (int i = 0; i < shape.size(); ++i) {
         QVector2D normal;
         QPointF p = shape[i];
-        // 简化计算法线的逻辑 (省略部分冗长代码，保持核心逻辑一致)
         if (i < shape.size() - 1) {
             QVector2D dir(shape[i + 1].x() - p.x(), shape[i + 1].y() - p.y());
             dir.normalize(); normal = QVector2D(-dir.y(), dir.x());
@@ -206,8 +264,14 @@ void MapRenderer::drawWideLane(const QVector<QPointF>& shape, float width, QColo
             QVector2D dir(p.x() - shape[i - 1].x(), p.y() - shape[i - 1].y());
             dir.normalize(); normal = QVector2D(-dir.y(), dir.x());
         }
-        // ... (此处省略中间平滑法线的代码，实际使用时请完整复制原 MapWidget::drawWideLane 的内容) ...
-        // 为节省篇幅，这里假设直接垂直
+
+        if (i > 0 && i < shape.size() - 1) {
+            QVector2D d1(shape[i].x() - shape[i - 1].x(), shape[i].y() - shape[i - 1].y());
+            QVector2D d2(shape[i + 1].x() - shape[i].x(), shape[i + 1].y() - shape[i].y());
+            d1.normalize(); d2.normalize();
+            QVector2D n1(-d1.y(), d1.x()); QVector2D n2(-d2.y(), d2.x());
+            normal = (n1 + n2).normalized();
+        }
 
         QVector2D offset = normal * halfW;
         QPointF pL(p.x() - offset.x(), p.y() - offset.y());
@@ -222,15 +286,23 @@ void MapRenderer::renderSingleLine(const QVector<QPointF>& shape, float offsetVa
     glBegin(GL_LINE_STRIP);
     for (int j = 0; j < shape.size(); ++j) {
         QPointF p = shape[j];
-        // 简化的法线计算，实际应完整复制
         QVector2D dir;
         if (j < shape.size() - 1) dir = QVector2D(shape[j + 1].x() - p.x(), shape[j + 1].y() - p.y());
         else dir = QVector2D(p.x() - shape[j - 1].x(), p.y() - shape[j - 1].y());
         dir.normalize();
         QVector2D normal(-dir.y(), dir.x());
 
+        if (j > 0 && j < shape.size() - 1) {
+            QVector2D d1(shape[j].x() - shape[j - 1].x(), shape[j].y() - shape[j - 1].y());
+            QVector2D d2(shape[j + 1].x() - shape[j].x(), shape[j + 1].y() - shape[j].y());
+            d1.normalize(); d2.normalize();
+            QVector2D n1(-d1.y(), d1.x()); QVector2D n2(-d2.y(), d2.x());
+            normal = (n1 + n2).normalized();
+        }
+
         QPointF pt(p.x() + normal.x() * offsetValue, p.y() + normal.y() * offsetValue);
-        glVertex2f(pt.x(), pt.y());
+        // 车道线高度 Z=0.02
+        glVertex3f(pt.x(), pt.y(), 0.02f);
     }
     glEnd();
 }
@@ -246,30 +318,94 @@ void MapRenderer::renderGeometricDashedLine(const QVector<QPointF>& shape, float
     if (distanceAlongPath < 0.0f) distanceAlongPath += totalPatternLen;
 
     glBegin(GL_LINES);
-    // ... (完整逻辑同原 MapWidget)
-    // 为确保编译通过，请将原 MapWidget::renderGeometricDashedLine 的完整循环体复制到这里
-    // 这里仅做示意
     for (int i = 0; i < shape.size() - 1; ++i) {
-        glVertex2f(shape[i].x(), shape[i].y());
-        glVertex2f(shape[i + 1].x(), shape[i + 1].y());
+        QPointF p1 = shape[i];
+        QPointF p2 = shape[i + 1];
+        QVector2D dirVec(p2.x() - p1.x(), p2.y() - p1.y());
+        float segmentLen = dirVec.length();
+        dirVec.normalize();
+        QVector2D normal(-dirVec.y(), dirVec.x());
+
+        float currentPos = 0.0f;
+        while (currentPos < segmentLen) {
+            float relPos = fmod(distanceAlongPath + currentPos, totalPatternLen);
+            if (relPos < dashLen) {
+                float drawLen = std::min(dashLen - relPos, segmentLen - currentPos);
+                QPointF v1(p1.x() + normal.x() * offsetValue + dirVec.x() * currentPos,
+                    p1.y() + normal.y() * offsetValue + dirVec.y() * currentPos);
+                QPointF v2(p1.x() + normal.x() * offsetValue + dirVec.x() * (currentPos + drawLen),
+                    p1.y() + normal.y() * offsetValue + dirVec.y() * (currentPos + drawLen));
+                // 虚线高度 Z=0.02
+                glVertex3f(v1.x(), v1.y(), 0.02f);
+                glVertex3f(v2.x(), v2.y(), 0.02f);
+                currentPos += drawLen;
+            }
+            else {
+                float skipLen = std::min(totalPatternLen - relPos, segmentLen - currentPos);
+                currentPos += skipLen;
+            }
+        }
+        distanceAlongPath += segmentLen;
     }
     glEnd();
 }
 
+// 【修复问题2】修复夹角问题，使用 double 精度计算向量，确保垂直
 void MapRenderer::drawStopLine(const std::shared_ptr<MapData>& data, const QVector<QPointF>& shape, float laneWidth, bool isEnd) {
     if (shape.size() < 2 || !data) return;
     QPointF basePt = isEnd ? shape.last() : shape.first();
     QRectF bounds = data->bounds();
-    // 边界检查
-    if (!bounds.contains(basePt)) return;
 
-    // ... (完整逻辑同原 MapWidget)
-    // 简单示意
+    // 简单边界检查，防止画在地图外
+    float eps = 1.5f;
+    if (basePt.x() <= bounds.left() + eps || basePt.x() >= bounds.right() - eps ||
+        basePt.y() <= bounds.top() + eps || basePt.y() >= bounds.bottom() - eps) return;
+
+    // 使用 double 精度 (QPointF) 进行减法，避免 float 大坐标相减造成精度丢失导致方向歪斜
+    double dx, dy;
+    if (isEnd) {
+        dx = basePt.x() - shape[shape.size() - 2].x();
+        dy = basePt.y() - shape[shape.size() - 2].y();
+    }
+    else {
+        dx = shape[1].x() - basePt.x();
+        dy = shape[1].y() - basePt.y();
+    }
+
+    // 归一化
+    double len = std::sqrt(dx * dx + dy * dy);
+    if (len < 0.0001) return;
+    dx /= len; dy /= len;
+
+    // roadDir 是道路纵向 (double)
+    // normal 是道路横向 (-dy, dx)
+
+    float halfW = laneWidth / 2.0f;
+    float stripeLen = 1.2f;
+    int stripeCount = 3;
+
     glDisable(GL_LINE_STIPPLE);
     glColor3f(1.0f, 1.0f, 1.0f);
     glLineWidth(2.5f);
     glBegin(GL_LINES);
-    glVertex2f(basePt.x(), basePt.y());
-    glVertex2f(basePt.x() + 1, basePt.y() + 1);
+
+    for (int i = 0; i <= stripeCount; ++i) {
+        // t 从 -1 到 1，覆盖车道宽度
+        float t = -1.0f + 2.0f * i / stripeCount;
+
+        // pS: 停止线的起始点 (横向分布)
+        // 使用 double 计算后转 float
+        float psX = (float)(basePt.x() + (-dy) * halfW * t);
+        float psY = (float)(basePt.y() + (dx)*halfW * t);
+
+        // pE: 停止线的结束点 (沿道路方向延伸)
+        float sign = isEnd ? -1.0f : 1.0f;
+        float peX = (float)(psX + dx * stripeLen * sign);
+        float peY = (float)(psY + dy * stripeLen * sign);
+
+        // 高度 Z=0.02
+        glVertex3f(psX, psY, 0.02f);
+        glVertex3f(peX, peY, 0.02f);
+    }
     glEnd();
 }

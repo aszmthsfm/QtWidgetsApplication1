@@ -30,6 +30,7 @@ private slots:
     void onStopClicked();
     void onRestartClicked();
     void onJumpToJunction(const QString& juncId);
+    void updateSelectedVehicleInfo();
 
 private:
     // ¸¨Öúº¯Êý
