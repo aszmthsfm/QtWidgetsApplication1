@@ -40,6 +40,9 @@ public:
 
     Ray getRay(const QPoint& screenPos);
 
+    //重设视角
+    void resetCameraAngles();
+
 private:
     // 内部辅助：透视投影设置
     void setPerspectiveProjection();

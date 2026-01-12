@@ -61,6 +61,8 @@ private:
 
     // 2D/3D 切换按钮 
     QPushButton* m_btnToggleView = nullptr;
+    //set view
+    QPushButton* m_btnSetView = nullptr;
 
     // 布局参数
     float m_mapHeight = 100.0f;

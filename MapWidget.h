@@ -58,4 +58,7 @@ private:
     QPoint m_lastMousePos;
     QPoint m_pressPos;
 
+public slots:  
+    // 重置视角的槽函数
+    void onResetView();
 };

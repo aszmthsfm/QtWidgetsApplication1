@@ -126,6 +126,19 @@ void QtWidgetsApplication1::initUI() {
         }
         });
 
+
+    // --- Set View 按钮 ---
+    m_btnSetView = new QPushButton("Set View", m_leftMap);
+    m_btnSetView->setGeometry(110, 20, 80, 30);
+    m_btnSetView->setStyleSheet(
+        "QPushButton { background-color: rgba(255, 255, 255, 220); border: 1px solid #8f8f91; border-radius: 4px; font-weight: bold; color: black; }"
+        "QPushButton:hover { background-color: white; }"
+        "QPushButton:pressed { background-color: #e0e0e0; }"
+    );
+    m_btnSetView->show();
+    // 连接信号：点击按钮 -> 调用左侧地图的 onResetView
+    connect(m_btnSetView, &QPushButton::clicked, m_leftMap, &MapWidget::onResetView);
+
     float mainMapScale = (float)height() / std::max(1.0f, m_mapHeight) * 0.95f;
     m_leftMap->setFocus(m_centerPos.x(), m_centerPos.y(), mainMapScale);
 

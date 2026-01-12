@@ -216,3 +216,13 @@ void MapWidget::wheelEvent(QWheelEvent* event) {
     update();
 }
 
+void MapWidget::onResetView() {
+    // 1. 重置相机的角度、高度参数
+    m_camera.resetCameraAngles();
+
+    // 2. 重新适配地图范围 
+    fitMap();
+
+    // 3. 触发重绘
+    update();
+}

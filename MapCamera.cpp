@@ -244,3 +244,16 @@ QPointF MapCamera::screenToWorld(const QPoint& screenPos) {
         return QPointF(m_centerX + t * rayX, m_centerY + t * rayY);
     }
 }
+
+void MapCamera::resetCameraAngles() {
+    if (m_is3D) {
+        // 3D 默认参数
+        m_pitch = 45.0f;       // 默认俯仰角
+        m_rotation = 0.0f;     // 默认朝向正北
+        m_cameraZ = 200.0f;    // 默认高度
+    }
+    else {
+        // 2D 默认参数
+        m_rotation = 0.0f;     // 默认朝向正北
+    }
+}
