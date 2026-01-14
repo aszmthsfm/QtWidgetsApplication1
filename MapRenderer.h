@@ -36,4 +36,10 @@ private:
 
 private:
     QOpenGLTexture* m_roadTexture = nullptr;
+
+    GLuint m_carList = 0;   // 轿车显示列表
+    GLuint m_busList = 0;   // 大车显示列表
+
+    // 辅助函数：加载 OBJ
+    GLuint loadObjModel(const QString& filePath);
 };

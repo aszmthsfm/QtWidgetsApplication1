@@ -62,6 +62,7 @@
     <ClCompile Include="InfoPanel.cpp" />
     <ClCompile Include="MapCamera.cpp" />
     <ClCompile Include="MapRenderer.cpp" />
+    <ClCompile Include="reportuse.cpp" />
     <ClCompile Include="RoadNetworkLoader.cpp" />
     <ClCompile Include="SimulationLoader.cpp" />
     <QtRcc Include="QtWidgetsApplication1.qrc" />

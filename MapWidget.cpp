@@ -114,15 +114,26 @@ void MapWidget::fitMap() {
 
 void MapWidget::initializeGL() {
     initializeOpenGLFunctions();
-
-    // 1. 初始化渲染器 (加载纹理等)
     m_renderer.initialize();
-
-    // 2. 只有 OpenGL 状态设置保留在这里，或者也可以移到 Renderer
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
     glEnable(GL_DEPTH_TEST);
+
+    // === 光照设置 ===
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);       // 开启 0 号灯
+    // 1. 增强环境光
+    GLfloat lightAmbient[] = { 0.7f, 0.7f, 0.7f, 1.0f };
+    glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient);
+    // 2. 增强漫反射光 
+    GLfloat lightDiffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse);
+    // 3. 设置光源位置 
+    GLfloat lightPos[] = { 0.0f, 0.0f, 1.0f, 0.0f };
+    glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
+    // 开启颜色材质，确保我们代码里的 glColor3f 能影响物体颜色
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 }
 
 void MapWidget::resizeGL(int w, int h) {

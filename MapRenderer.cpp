@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <cmath>
 #include <QVector2D>
-#include <QVector3D> // 用于更精确的计算
+#include <QVector3D> 
+#include <QFile>
+#include <QTextStream>
 
-// 确保包含 GL 头文件
+// 包含 GL 头文件
 #include <GL/gl.h>
 
 MapRenderer::MapRenderer() {
@@ -21,7 +23,7 @@ MapRenderer::~MapRenderer() {
 void MapRenderer::initialize() {
     initializeOpenGLFunctions();
 
-    // 加载纹理 (确保 asphalt.jpg 在构建目录或工作目录下)
+    // 加载纹理 
     QImage img("asphalt.jpg");
     if (!img.isNull()) {
         m_roadTexture = new QOpenGLTexture(img.mirrored());
@@ -29,6 +31,9 @@ void MapRenderer::initialize() {
         m_roadTexture->setMagnificationFilter(QOpenGLTexture::Linear);
         m_roadTexture->setWrapMode(QOpenGLTexture::Repeat);
     }
+
+    m_carList = loadObjModel("car.obj");
+    m_busList = loadObjModel("bus.obj");
 }
 
 void MapRenderer::render(const std::shared_ptr<MapData>& data, const AppConfig& config, bool is3D, int style) {
@@ -55,7 +60,30 @@ void MapRenderer::drawVehicles(const std::shared_ptr<MapData>& data, bool is3D) 
 
         // 1. 正常绘制车辆
         if (is3D) {
-            draw3DVehicle(veh.length, veh.width, veh.color);
+            // === 3D 模型绘制逻辑 ===
+            
+            // 1. 判断车型
+            GLuint modelToDraw = (veh.length > 6.0f) ? m_busList : m_carList;
+            if (modelToDraw != 0) {
+                // 2. 调整姿态
+                // Kenney 的模型通常是 Y轴向上，我们需要绕 X 轴旋转 90 度让它趴在地上
+                glPushMatrix();
+                glTranslatef(0.0f, -veh.length / 2.0f, 0.0f);
+                glRotatef(90.0f, 1.0f, 0.0f, 0.0f);
+                // 3. 调整朝向 
+                glRotatef(180.0f, 0.0f, 1.0f, 0.0f);
+                // 4. 缩放适配
+                float scaleFactor = veh.width * 0.6f;
+                glScalef(scaleFactor, scaleFactor, scaleFactor);
+                // 5. 设置颜色并绘制
+                glColor3f(veh.color.redF(), veh.color.greenF(), veh.color.blueF());
+                glCallList(modelToDraw);
+                glPopMatrix();
+            }
+            else {
+                // 如果模型加载失败，回退到画方块
+                draw3DVehicle(veh.length, veh.width, veh.color);
+            }
         }
         else {
             // 2D 绘制
@@ -350,7 +378,6 @@ void MapRenderer::renderGeometricDashedLine(const QVector<QPointF>& shape, float
     glEnd();
 }
 
-// 【修复问题2】修复夹角问题，使用 double 精度计算向量，确保垂直
 void MapRenderer::drawStopLine(const std::shared_ptr<MapData>& data, const QVector<QPointF>& shape, float laneWidth, bool isEnd) {
     if (shape.size() < 2 || !data) return;
     QPointF basePt = isEnd ? shape.last() : shape.first();
@@ -408,4 +435,67 @@ void MapRenderer::drawStopLine(const std::shared_ptr<MapData>& data, const QVect
         glVertex3f(peX, peY, 0.02f);
     }
     glEnd();
+}
+
+GLuint MapRenderer::loadObjModel(const QString& filePath) {
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qDebug() << "Error: Cannot find model file:" << filePath;
+        return 0; // 加载失败
+    }
+
+    QVector<QVector3D> v;   // 顶点
+    QVector<QVector3D> vn;  // 法线
+
+    GLuint listId = glGenLists(1);
+    glNewList(listId, GL_COMPILE);
+
+    QTextStream in(&file);
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        QStringList parts = line.split(' ', Qt::SkipEmptyParts);
+        if (parts.isEmpty()) continue;
+
+        if (parts[0] == "v") {
+            // 读取顶点: v x y z
+            v.append(QVector3D(parts[1].toFloat(), parts[2].toFloat(), parts[3].toFloat()));
+        }
+        else if (parts[0] == "vn") {
+            // 读取法线: vn x y z
+            vn.append(QVector3D(parts[1].toFloat(), parts[2].toFloat(), parts[3].toFloat()));
+        }
+        else if (parts[0] == "f") {
+            // 读取面: f v1/vt1/vn1 v2/vt2/vn2 v3/vt3/vn3
+            glBegin(GL_TRIANGLES);
+            for (int i = 1; i < parts.size(); ++i) {
+                // 分割 "顶点索引/纹理索引/法线索引"
+                QStringList subParts = parts[i].split('/');
+
+                // 获取顶点索引 (OBJ 索引从1开始，需要-1)
+                int vIdx = subParts[0].toInt() - 1;
+
+                // 获取法线索引 (如果有的话，通常在第3位)
+                int vnIdx = -1;
+                if (subParts.size() >= 3 && !subParts[2].isEmpty()) {
+                    vnIdx = subParts[2].toInt() - 1;
+                }
+
+                // 设置法线 (如果有)
+                if (vnIdx >= 0 && vnIdx < vn.size()) {
+                    glNormal3f(vn[vnIdx].x(), vn[vnIdx].y(), vn[vnIdx].z());
+                }
+
+                // 设置顶点
+                if (vIdx >= 0 && vIdx < v.size()) {
+                    glVertex3f(v[vIdx].x(), v[vIdx].y(), v[vIdx].z());
+                }
+            }
+            glEnd();
+        }
+    }
+    glEndList();
+    file.close();
+
+    qDebug() << "Model loaded:" << filePath << "Vertices:" << v.size();
+    return listId;
 }
